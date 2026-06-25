@@ -1,14 +1,17 @@
 import { SITES } from '../sites/index.js';
 import { genericScrape } from '../sites/base.js';
 import { getEmailListings } from './email.js';
-import { getSeenIds, insertSeen, isSiteSeeded } from './store.js';
-import { notify } from './telegram.js';
+import { getRecords, saveRows } from './store.js';
+import { notify, notifySignal } from './telegram.js';
+import { evaluate } from './signals.js';
 import { closeBrowser } from './http.js';
 import { env } from '../config.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Logique partagee : dedup -> seed-guard -> notif -> enregistrement.
+const ICON = { new: '🏠', drop: '🔻', stale: '⏳', reappear: '♻️' };
+
+// Logique partagee : memoire temporelle -> signaux -> notif -> enregistrement.
 async function emit(source, listings) {
   if (!listings.length) return 0;
 
@@ -16,25 +19,42 @@ async function emit(source, listings) {
   for (const l of listings) if (!byId.has(l.id)) byId.set(l.id, l);
   const unique = [...byId.values()];
 
-  const seen = await getSeenIds(source);
-  const fresh = unique.filter((l) => !seen.has(l.id));
-  if (!fresh.length) return 0;
+  const records = await getRecords(source);
+  const seeding = env.seedOnly || records.size === 0;
+  const nowIso = new Date().toISOString();
 
-  // 1er passage sur cette source OU mode seed : on enregistre sans notifier.
-  const seeded = await isSiteSeeded(source);
-  if (env.seedOnly || !seeded) {
-    await insertSeen(source, fresh);
-    console.log(`  [${source}] seed : ${fresh.length} annonces enregistrees (pas de notif).`);
+  const rows = [];
+  const alerts = [];
+  for (const l of unique) {
+    const { row, alerts: a } = evaluate(records.get(l.id), { ...l, site: source }, nowIso, seeding);
+    rows.push(row);
+    for (const x of a) alerts.push(x);
+  }
+
+  await saveRows(source, rows);
+
+  if (seeding) {
+    console.log(`  [${source}] seed : ${rows.length} annonces enregistrees (pas de notif).`);
     return 0;
   }
 
   let sent = 0;
-  for (const l of fresh) {
-    if (env.debug) { console.log(`  [DEBUG] notif simulee: ${l.commune || '?'} ${l.price || ''} ${l.url}`); }
-    else { try { await notify(l); sent++; await sleep(400); } catch (e) { console.warn(`  notif KO: ${e.message}`); } }
+  for (const a of alerts) {
+    if (env.debug) {
+      console.log(`  [DEBUG] ${ICON[a.kind] || ''} ${a.kind} : ${a.l.commune || '?'} ${a.l.price || ''} ${a.l.url}`);
+      sent++;
+      continue;
+    }
+    try {
+      if (a.kind === 'new') await notify(a.l);
+      else await notifySignal(a);
+      sent++;
+      await sleep(400);
+    } catch (e) {
+      console.warn(`  notif KO (${a.kind}): ${e.message}`);
+    }
   }
-  await insertSeen(source, fresh);
-  return env.debug ? fresh.length : sent;
+  return sent;
 }
 
 async function processSite(site) {
@@ -77,6 +97,6 @@ export async function runOnce() {
   }
 
   if (env.usePlaywright) await closeBrowser();
-  console.log(`[${ts}] Termine — ${total} nouvelle(s) annonce(s).`);
+  console.log(`[${ts}] Termine — ${total} notification(s) (nouveautes + signaux).`);
   return total;
 }

@@ -11,38 +11,35 @@ function supabaseClient() {
   return _client;
 }
 
-// Renvoie un Set des listing_id deja connus pour un site.
-export async function getSeenIds(site) {
-  const ids = new Set();
+// Charge tout l'historique connu d'un site -> Map(listing_id -> record).
+export async function getRecords(site) {
+  const map = new Map();
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseClient()
       .from('immo_seen')
-      .select('listing_id')
+      .select('listing_id, url, title, commune, image, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale, alerted_drop_price')
       .eq('site', site)
       .range(from, from + pageSize - 1);
     if (error) throw error;
-    data.forEach((r) => ids.add(r.listing_id));
+    for (const r of data) map.set(r.listing_id, r);
     if (data.length < pageSize) break;
   }
-  return ids;
+  return map;
 }
 
-// Insere les nouvelles annonces (ignore les doublons).
-export async function insertSeen(site, listings) {
-  if (!listings.length) return;
-  const rows = listings.map((l) => ({
-    site,
-    listing_id: l.id,
-    url: l.url,
-    title: l.title,
-    price: l.price,
-    commune: l.commune,
-    image: l.image,
-  }));
+// Compat : Set des ids connus (utilise encore par le bridge e-mail le cas echeant).
+export async function getSeenIds(site) {
+  return new Set((await getRecords(site)).keys());
+}
+
+// Upsert d'un lot de lignes completes (insert OU update).
+export async function saveRows(site, rows) {
+  if (!rows.length) return;
+  const payload = rows.map((r) => ({ site, ...r }));
   const { error } = await supabaseClient()
     .from('immo_seen')
-    .upsert(rows, { onConflict: 'site,listing_id', ignoreDuplicates: true });
+    .upsert(payload, { onConflict: 'site,listing_id' });
   if (error) throw error;
 }
 

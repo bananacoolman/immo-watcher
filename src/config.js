@@ -25,6 +25,11 @@ export const env = {
   seedOnly: process.env.SEED_ONLY === '1',
   minPrice: parseInt(process.env.MIN_PRICE || '300000', 10),
   keepUnknownPrice: process.env.KEEP_UNKNOWN_PRICE !== '0',
+  // Signaux "mandats qui trainent"
+  signalsEnabled: process.env.SIGNALS_ENABLED !== '0',   // actif par defaut
+  staleDays: parseInt(process.env.STALE_DAYS || '75', 10),       // ancien depuis X jours
+  dropPct: parseFloat(process.env.DROP_PCT || '0.07'),           // baisse >= 7%
+  reappearGapDays: parseInt(process.env.REAPPEAR_GAP_DAYS || '5', 10), // disparu puis revenu
   // Bridge e-mail (Leboncoin / Seloger via alertes)
   emailEnabled: process.env.EMAIL_ENABLED === '1',
   imapHost: process.env.IMAP_HOST,

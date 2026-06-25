@@ -160,6 +160,7 @@ export async function genericScrape(site) {
       price: r.price || (num != null ? num.toLocaleString('fr-FR') + ' €' : null),
       commune,
       image: r.image || null,
+      priceNum: num ?? null,
     });
   }
 
