@@ -7,7 +7,9 @@
     "start": "node src/index.js",
     "once": "MODE=once node src/index.js",
     "debug": "MODE=once DEBUG_SCRAPE=1 node src/index.js",
-    "seed": "MODE=once SEED_ONLY=1 node src/index.js"
+    "seed": "MODE=once SEED_ONLY=1 node src/index.js",
+    "digest": "MODE=digest node src/index.js",
+    "digest:debug": "MODE=digest DEBUG_SCRAPE=1 node src/index.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

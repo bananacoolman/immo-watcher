@@ -52,3 +52,31 @@ export async function isSiteSeeded(site) {
   if (error) throw error;
   return (count || 0) > 0;
 }
+
+// Toutes les annonces, tous sites confondus (pour multi-mandat / digest).
+export async function getAllRows() {
+  const out = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseClient()
+      .from('immo_seen')
+      .select('site, listing_id, url, title, commune, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale')
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < pageSize) break;
+  }
+  return out;
+}
+
+// Dedup des alertes agregees (multi-mandat...). Renvoie true si la cle est NOUVELLE.
+export async function claimAlert(key) {
+  const { error } = await supabaseClient()
+    .from('immo_alerts')
+    .insert({ key });
+  if (error) {
+    if (error.code === '23505') return false; // deja present (cle dupliquee)
+    throw error;
+  }
+  return true;
+}

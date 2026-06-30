@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { runOnce } from './core/run.js';
+import { runOnce, runDigest } from './core/run.js';
 import { env } from './config.js';
 
 function checkEnv() {
@@ -13,6 +13,11 @@ function checkEnv() {
 
 async function main() {
   checkEnv();
+
+  if (env.mode === 'digest') {
+    await runDigest();
+    process.exit(0);
+  }
 
   if (env.mode === 'once') {
     await runOnce();

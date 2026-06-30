@@ -1,0 +1,24 @@
+name: immo-digest
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'    # lundi 05:00 UTC (07:00 Paris l'ete) — digest hebdo
+  workflow_dispatch: {}     # bouton "Run workflow" pour tester a la demande
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npm run digest
+        env:
+          MODE: digest
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

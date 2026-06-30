@@ -1,21 +1,28 @@
 name: immo-watch
+
 on:
   schedule:
-    - cron: '*/10 * * * *'
-  workflow_dispatch: {}
+    - cron: '*/10 * * * *'    # toutes les 10 min (peut etre decale par GitHub)
+  workflow_dispatch: {}         # bouton "Run workflow" manuel
+
 concurrency:
   group: immo-watch
-  cancel-in-progress: false
+  cancel-in-progress: false     # ne pas couper un passage en cours
+
 jobs:
   watch:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
+
       - run: npm install
+
+      # Navigateur headless pour Wretman (mis en cache pour ne pas le re-telecharger)
       - name: Cache Playwright
         id: pw-cache
         uses: actions/cache@v4
@@ -24,6 +31,7 @@ jobs:
           key: playwright-chromium-v1
       - if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium
+
       - run: npm run once
         env:
           MODE: once

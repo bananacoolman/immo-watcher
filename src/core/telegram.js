@@ -1,4 +1,5 @@
 import { env } from '../config.js';
+import { marketLine } from './market.js';
 
 const API = (m) => `https://api.telegram.org/bot${env.telegramToken}/${m}`;
 
@@ -7,10 +8,12 @@ function esc(s = '') {
 }
 
 function caption(l) {
+  const ml = marketLine(l);
   const lines = [
     `🏠 <b>Nouvelle annonce — ${esc(l.site)}</b>`,
     l.commune ? `📍 ${esc(l.commune)}` : null,
     l.price ? `💶 ${esc(l.price)}` : null,
+    ml ? `📊 ${ml}` : null,
     l.title ? `📝 ${esc(l.title)}` : null,
     `🔗 ${esc(l.url)}`,
   ].filter(Boolean);
@@ -72,6 +75,7 @@ export async function notifySignal(a) {
       `⏳ <b>Mandat qui traîne — ${esc(l.site)}</b>`,
       loc,
       l.price ? `💶 ${esc(l.price)}` : null,
+      marketLine(l) ? `📊 ${marketLine(l)}` : null,
       `📅 ${a.days} j en ligne — sans doute négociable`,
       l.title ? `📝 ${esc(l.title)}` : null,
       link,
@@ -86,4 +90,22 @@ export async function notifySignal(a) {
     ];
   }
   await call('sendMessage', { text: lines.filter(Boolean).join('\n'), parse_mode: 'HTML' });
+}
+
+// Notifie un multi-mandat : meme bien chez plusieurs agences (lead vendeur).
+export async function notifyMulti(c) {
+  const lines = [
+    `🎯 <b>Multi-mandat — ${esc(c.commune)}</b>`,
+    `💶 ${eur(c.price)} · chez <b>${c.sites.length} agences</b>`,
+    `🏢 ${c.sites.map(esc).join(', ')}`,
+    `↳ vendeur en mandat simple, souvent déçu — bon à recontacter`,
+    '',
+    ...c.items.slice(0, 6).map((it) => `• <i>${esc(it.site)}</i> ${eur(it.price_num)} — ${esc(it.url)}`),
+  ];
+  await call('sendMessage', { text: lines.join('\n'), parse_mode: 'HTML', disable_web_page_preview: true });
+}
+
+// Envoie le digest hebdo (message deja formate en HTML).
+export async function sendDigest(text) {
+  await call('sendMessage', { text, parse_mode: 'HTML', disable_web_page_preview: true });
 }
