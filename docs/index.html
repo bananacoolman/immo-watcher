@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Atlas de prospection live — Arrière-pays niçois</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0d1b2a; --ink-2:#0a1622; --line:rgba(201,162,106,.22);
+    --gold:#c9a86a; --gold-soft:#e3cd9a; --parch:#f3ecde; --muted:#9fb0c0;
+    --t1:#c9a227; --t2:#c98a3c; --t3:#9e8b6b; --t4:#6f8190;
+    --live:#5fd08a; --warn:#e0b24a;
+    --serif:'Cormorant Garamond',Georgia,serif; --sans:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--ink);color:var(--parch);font-family:var(--sans)}
+  #app{display:flex;height:100%;width:100%}
+  #panel{width:380px;min-width:380px;height:100%;overflow-y:auto;
+    background:linear-gradient(180deg,var(--ink),var(--ink-2));border-right:1px solid var(--line);padding:28px 26px 40px}
+  .eyebrow{font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--gold);font-weight:600}
+  h1{font-family:var(--serif);font-weight:600;font-size:32px;line-height:1.05;margin:10px 0 6px}
+  .sub{color:var(--muted);font-size:12.5px;line-height:1.5;margin-bottom:18px}
+  .status{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;
+    padding:5px 11px;border-radius:30px;border:1px solid var(--line);margin-bottom:22px}
+  .status .pulse{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+  .status.on .pulse{background:var(--live);box-shadow:0 0 0 0 rgba(95,208,138,.6);animation:pulse 2s infinite}
+  @keyframes pulse{70%{box-shadow:0 0 0 7px rgba(95,208,138,0)}100%{box-shadow:0 0 0 0 rgba(95,208,138,0)}}
+  .rule{height:1px;background:var(--line);margin:20px 0}
+  .sec-label{font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:13px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-weight:500;color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  th.r,td.r{text-align:right}
+  td{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+  .cmn{font-family:var(--serif);font-size:16px;font-weight:600}
+  .price{font-variant-numeric:tabular-nums;font-weight:600}
+  .mini{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .legend-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);margin:7px 0}
+  .legend-row b{color:var(--parch);font-weight:600}
+  .swatch{width:14px;height:14px;border-radius:50%;flex:none}
+  .diamond{width:11px;height:11px;background:var(--ink);border:1.5px solid var(--gold);transform:rotate(45deg);flex:none}
+  .diamond.stale{border-color:var(--warn);background:#2a2310}
+  .note{font-size:12.5px;line-height:1.6;color:#c7d2dd;margin:0 0 11px;padding-left:14px;position:relative}
+  .note::before{content:'';position:absolute;left:0;top:7px;width:5px;height:5px;background:var(--gold);border-radius:50%}
+  .note b{color:var(--gold-soft);font-weight:600}
+  .foot{font-size:10.5px;color:#6f7f8e;line-height:1.5;margin-top:16px}
+  .cfg{font-size:11px;color:var(--muted);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;padding:11px 12px;line-height:1.5;margin-top:8px}
+  .cfg code{color:var(--gold-soft)}
+  #map{flex:1;height:100%;background:#aab}
+  .leaflet-container{font-family:var(--sans)}
+  .med{display:flex;align-items:center;justify-content:center;flex-direction:column;border-radius:50%;color:#fff;
+    border:2px solid rgba(255,255,255,.9);box-shadow:0 4px 14px rgba(10,22,34,.5)}
+  .med .pm{font-weight:600;font-size:12px;line-height:1;font-variant-numeric:tabular-nums}
+  .med .pu{font-size:8px;opacity:.85;margin-top:1px}
+  .med-label{font-family:var(--serif);font-weight:600;color:#10202f;font-size:13px;
+    text-shadow:0 1px 3px rgba(255,255,255,.95);white-space:nowrap;margin-top:2px;text-align:center}
+  .med-count{font-size:9px;font-weight:600;color:#10202f;background:rgba(255,255,255,.8);border-radius:20px;
+    padding:1px 7px;margin-top:3px;white-space:nowrap}
+  .lst{width:13px;height:13px;background:#0d1b2a;border:1.5px solid var(--gold);transform:rotate(45deg);box-shadow:0 2px 6px rgba(10,22,34,.45)}
+  .lst.stale{border-color:var(--warn);background:#2a2310}
+  .leaflet-popup-content-wrapper{background:var(--ink);color:var(--parch);border-radius:9px;border:1px solid var(--line)}
+  .leaflet-popup-tip{background:var(--ink);border:1px solid var(--line)}
+  .leaflet-popup-content{margin:13px 15px;font-size:13px;line-height:1.5}
+  .pp-src{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);font-weight:600}
+  .pp-price{font-family:var(--serif);font-size:22px;font-weight:600;margin:3px 0}
+  .pp-cmn{color:var(--muted);font-size:12px}
+  .pp-badge{display:inline-block;font-size:10px;font-weight:600;color:var(--warn);border:1px solid var(--warn);border-radius:20px;padding:1px 8px;margin-top:6px}
+  .pp-actions{display:flex;gap:8px;margin-top:10px}
+  .pp-btn{flex:1;text-align:center;font-size:11.5px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:7px}
+  .pp-btn.gold{background:var(--gold);color:#1a1206}
+  .pp-btn.ghost{border:1px solid var(--line);color:var(--gold)}
+  .llist{margin-top:6px;border-top:1px solid var(--line);max-height:230px;overflow-y:auto}
+  .lrow{display:flex;align-items:center;gap:9px;padding:7px 2px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px}
+  .lrow .rp{font-weight:600;font-variant-numeric:tabular-nums;min-width:60px;color:var(--parch)}
+  .lrow .rs{flex:1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lrow .ra{color:var(--gold);text-decoration:none;font-weight:700;font-size:14px}
+  .lrow .ra.dim{color:#566;font-weight:400}
+  .lrow.st .rp{color:var(--warn)}
+  .lrow.st .rp::after{content:' ⏳';font-size:10px}
+  .lmore{padding:8px 0;color:var(--muted);font-size:11px;text-align:center}
+  .cmn-pop .leaflet-popup-content{margin:13px 14px}
+  .badge{position:absolute;z-index:1000;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(13,27,42,.92);
+    border:1px solid var(--line);border-radius:30px;padding:7px 16px;font-size:11px;color:var(--muted)}
+  .badge b{color:var(--gold);font-weight:600}
+  @media(max-width:880px){
+    #app{flex-direction:column}
+    #panel{width:100%;min-width:0;height:auto;max-height:44vh;border-right:none;border-bottom:1px solid var(--line)}
+    #map{height:56vh}
+    h1{font-size:27px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <div class="eyebrow">Barnes · Côte d'Azur</div>
+    <h1>Atlas de prospection</h1>
+    <div class="sub">Arrière-pays niçois — 7 communes. Carte routière + biens à vendre, tenus à jour par la veille.</div>
+    <div id="status" class="status"><span class="pulse"></span><span id="status-txt">Connexion…</span></div>
+
+    <div class="sec-label">Marché · prix au m² maisons</div>
+    <table id="ptable"><thead><tr><th>Commune</th><th class="r">€/m²</th><th class="r">À vendre</th></tr></thead><tbody></tbody></table>
+
+    <div class="rule"></div>
+    <div class="sec-label">Légende</div>
+    <div id="legend"></div>
+    <div class="legend-row" style="margin-top:12px"><span class="swatch" style="background:var(--gold)"></span><span>Clique une commune → <b>liste des biens</b> + itinéraire</span></div>
+    <div class="legend-row"><span style="color:var(--warn);font-weight:700;width:14px;text-align:center">⏳</span><span><b>Mandat qui traîne</b> / en baisse — à recontacter</span></div>
+
+    <div class="rule"></div>
+    <div class="sec-label">Lecture stratégique</div>
+    <p class="note"><b>Saint-Paul-de-Vence</b> : cœur prestige, plafonds les plus hauts, mandats rares et disputés.</p>
+    <p class="note"><b>Vence</b> : plus gros volume et vue mer sur les hauteurs — terrain de chasse n°1 en nombre de mandats.</p>
+    <p class="note"><b>La Colle-sur-Loup</b> : monte vite, un cran sous Saint-Paul — bon point d'entrée.</p>
+    <p class="note"><b>Vallée</b> (Saint-Jeannet, Gattières, La Gaude) : plus accessible, moins de concurrence haut de gamme.</p>
+
+    <div class="rule"></div>
+    <div class="sec-label">Passer en direct</div>
+    <div class="cfg">Renseigne en haut du fichier <code>SUPABASE_URL</code> et la clé <code>anon</code> (publique, jamais la clé secrète), et active la policy de lecture (voir notice). Sans ça, la carte affiche le dernier instantané.</div>
+
+    <div class="foot">Prix au m² indicatifs (MeilleursAgents, efficity, SeLoger, DVF), repère mensuel. Biens positionnés au centre de la commune (adresse exacte souvent masquée). « À vendre » et signaux = données de ta veille.</div>
+  </aside>
+
+  <div id="map"></div>
+  <div class="badge">Plan · Satellite · Relief — <b>clique un bien</b> pour l'itinéraire</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="config.js"></script>
+<script>
+/* =====================  CONFIG LIVE  =====================
+   Les identifiants sont dans le fichier voisin "config.js"
+   (window.SUPA_URL / window.SUPA_KEY) — à créer une seule fois.   */
+const SUPABASE_URL = (window.SUPA_URL || "");
+const SUPABASE_ANON_KEY = (window.SUPA_KEY || "");
+const ACTIVE_DAYS = 3;     // "à vendre" = revu il y a moins de 3 jours
+const STALE_DAYS  = 75;    // seuil "mandat qui traîne"
+/* ======================================================== */
+
+const TIERS=[{min:6000,name:'Prestige',color:'#c9a227'},{min:5500,name:'Élevé',color:'#c98a3c'},
+  {min:5000,name:'Moyen-haut',color:'#9e8b6b'},{min:0,name:'Accessible',color:'#6f8190'}];
+const tierOf=p=>TIERS.find(t=>p>=t.min);
+
+const COMMUNES=[
+  {n:'Saint-Paul-de-Vence',lat:43.6951,lng:7.1226,p:6700},
+  {n:'La Colle-sur-Loup',  lat:43.6864,lng:7.1011,p:5900},
+  {n:'La Gaude',           lat:43.7131,lng:7.1597,p:5500},
+  {n:'Tourrettes-sur-Loup',lat:43.7128,lng:7.0583,p:5300},
+  {n:'Vence',              lat:43.7225,lng:7.1119,p:5000},
+  {n:'Saint-Jeannet',      lat:43.7472,lng:7.1456,p:4900},
+  {n:'Gattières',          lat:43.7589,lng:7.1758,p:4500},
+];
+const cmap=Object.fromEntries(COMMUNES.map(c=>[c.n,c]));
+
+const SNAPSHOT=[
+  {c:'Saint-Paul-de-Vence',src:'Zingraff',price:12900000,url:'https://www.michaelzingraf.com/fr/saint-paul-de-vence-exceptionnelle-residence-85708725'},
+  {c:'Saint-Paul-de-Vence',src:'Zingraff',price:8900000,url:'https://www.michaelzingraf.com/fr/co-exclusivite-propriete-dexception-sur-1ha-de-terrain-85151031'},
+  {c:'Saint-Paul-de-Vence',src:'Zingraff',price:7500000,url:'https://www.michaelzingraf.com/fr/exceptionnelle-villa-de-luxe-sur-cinq-niveaux-avec-vue-mer-panoramique-86827296'},
+  {c:'Saint-Paul-de-Vence',src:'Wretman Estate',price:4500000,url:'https://www.wretmanestate.com/biens/vente-bastide-15-pieces-saint-paul-de-vence-06570-85789271/'},
+  {c:'Saint-Paul-de-Vence',src:'Le Mas Provençal',price:3600000,url:''},
+  {c:'Saint-Paul-de-Vence',src:'Saint Paul Properties',price:3900000,url:''},
+  {c:'La Colle-sur-Loup',src:"Sotheby's",price:19900000,url:'https://www.cotedazur-sothebysrealty.com/fr/immobilier-prestige/ref-ca14-680/vente-maison-provencale-la-colle-sur-loup-11-pieces-8-chambres-06480/'},
+  {c:'La Colle-sur-Loup',src:'Zingraff',price:14900000,url:'https://www.michaelzingraf.com/fr/proche-saint-paul-de-vence-majesteuse-propriete-85715809'},
+  {c:'La Colle-sur-Loup',src:'Saint Paul Properties',price:2990000,url:''},
+  {c:'La Colle-sur-Loup',src:"Sotheby's",price:2205000,url:'https://www.cotedazur-sothebysrealty.com/fr/immobilier-prestige/ref-ca14-609/vente-bastide-la-colle-sur-loup-8-pieces-4-chambres-06480/'},
+  {c:'Vence',src:'Zingraff',price:9900000,url:'https://www.michaelzingraf.com/fr/proche-saint-paul-de-vence-sublime-bergerie-avec-vue-mer-panoramique-85998987'},
+  {c:'Vence',src:'John Taylor',price:5950000,url:'https://www.john-taylor.fr/france/vente/maison-villa-propriete/cote-d-azur/saint-paul-de-vence-et-ses-environs/vence/V2773CO/'},
+  {c:'Vence',src:'Saint Paul Properties',price:5250000,url:''},
+  {c:'Vence',src:'TSL Immo',price:3450000,url:'https://www.tsl-immo.com/vente/06-alpes-maritimes/3-vence/sur-les-hauteurs-les-plus-convoitees-de-vence-une-villa-d-exception-avec-vue-mer-panoramique/2680-villa'},
+  {c:'Vence',src:"Sotheby's",price:2490000,url:'https://www.cotedazur-sothebysrealty.com/fr/immobilier-prestige/ref-ca14-692/vente-bastide-vence-9-pieces-5-chambres-06140/'},
+  {c:'Vence',src:'John Taylor',price:2100000,url:'https://www.john-taylor.fr/france/vente/maison-villa-propriete/cote-d-azur/saint-paul-de-vence-et-ses-environs/vence/V2738CO/'},
+  {c:'Tourrettes-sur-Loup',src:'TSL Immo',price:2900000,url:''},
+  {c:'Tourrettes-sur-Loup',src:'Le Mas Provençal',price:2100000,url:''},
+  {c:'Tourrettes-sur-Loup',src:'John Taylor',price:1290000,url:'https://www.john-taylor.fr/france/vente/maison-villa-propriete/cote-d-azur/saint-paul-de-vence-et-ses-environs/tourrettes-sur-loup/V2784CO/'},
+  {c:'La Gaude',src:'John Taylor',price:1550000,url:'https://www.john-taylor.fr/france/vente/maison-villa-propriete/cote-d-azur/saint-paul-de-vence-et-ses-environs/la-gaude/V2775CO/'},
+];
+
+const fmtK=n=>n==null?'Prix nc':n>=1000000?(n/1000000).toLocaleString('fr-FR',{maximumFractionDigits:n%1000000?1:0})+' M€':Math.round(n/1000)+' k€';
+const fmtM2=n=>n.toLocaleString('fr-FR')+' €';
+const median=a=>{a=a.filter(x=>x!=null).sort((x,y)=>x-y);return a.length?a[Math.floor(a.length/2)]:null};
+const dir=(lat,lng)=>'https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng;
+// dispersion naturelle, stable (même position à chaque ouverture) autour du centre commune
+function hstr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function rng(seed){let t=seed>>>0;return function(){t+=0x6D2B79F5;let r=Math.imul(t^t>>>15,1|t);r^=r+Math.imul(r^r>>>7,61|r);return((r^r>>>14)>>>0)/4294967296;};}
+const COSLAT=Math.cos(43.72*Math.PI/180); // corrige l'aspect lat/lng pour un nuage rond au sol
+
+const map=L.map('map',{zoomControl:true}).setView([43.715,7.12],12.4);
+const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {subdomains:'abc',maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
+const plan=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  {subdomains:'abcd',maxZoom:20,attribution:'&copy; OpenStreetMap &copy; CARTO'});
+const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom:19,attribution:'&copy; Esri'});
+const relief=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+  {subdomains:'abc',maxZoom:17,attribution:'&copy; OpenTopoMap (CC-BY-SA)'});
+L.control.layers({'Plan routier':osm,'Plan clair':plan,'Satellite':sat,'Relief':relief},null,{position:'topright',collapsed:false}).addTo(map);
+map.fitBounds(COMMUNES.map(c=>[c.lat,c.lng]),{padding:[60,60]});
+
+const medLayer=L.layerGroup().addTo(map);
+const listingLayer=L.layerGroup().addTo(map);
+
+function render(listings,live){
+  medLayer.clearLayers(); listingLayer.clearLayers();
+  const stats={}; COMMUNES.forEach(c=>stats[c.n]={n:0,prices:[],stale:0,items:[]});
+  listings.forEach(l=>{const s=stats[l.c]; if(!s)return; s.n++; if(l.price)s.prices.push(l.price); if(l.stale)s.stale++; s.items.push(l);});
+
+  COMMUNES.forEach(c=>{
+    const t=tierOf(c.p), s=stats[c.n], size=48+(c.p-4500)/2500*26;
+    const cnt=s.n?'<div class="med-count">'+s.n+' à vendre'+(s.stale?' · '+s.stale+'⏳':'')+'</div>':'<div class="med-count">aucun</div>';
+    const html='<div style="display:flex;flex-direction:column;align-items:center">'
+      +'<div class="med" style="width:'+size+'px;height:'+size+'px;background:'+t.color+'">'
+      +'<span class="pm">'+(c.p/1000).toLocaleString('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1})+'k</span><span class="pu">€/m²</span></div>'
+      +'<div class="med-label">'+c.n+'</div>'+cnt+'</div>';
+    const icon=L.divIcon({html,className:'',iconSize:[size,size+34],iconAnchor:[size/2,size/2]});
+    const med=median(s.prices);
+
+    // liste des biens de la commune (triés par prix décroissant)
+    const items=s.items.slice().sort((a,b)=>(b.price||0)-(a.price||0));
+    const CAP=120;
+    const rows=items.slice(0,CAP).map(l=>{
+      const link=l.url?'<a class="ra" href="'+l.url+'" target="_blank" rel="noopener" title="Voir l\'annonce">↗</a>':'<span class="ra dim">—</span>';
+      return '<div class="lrow'+(l.stale?' st':'')+'"><span class="rp">'+fmtK(l.price)+'</span><span class="rs">'+(l.src||'')+'</span>'+link+'</div>';
+    }).join('');
+    const more=items.length>CAP?'<div class="lmore">+ '+(items.length-CAP)+' autres…</div>':'';
+
+    const popup='<div class="pp-src">'+t.name+' · '+fmtM2(c.p)+'/m²</div>'
+      +'<div class="pp-price">'+c.n+'</div>'
+      +'<div class="pp-cmn">'+s.n+' à vendre'+(med?' · médiane '+fmtK(med):'')+(s.stale?' · '+s.stale+' ⏳':'')+'</div>'
+      +'<a class="pp-btn gold" style="display:block;margin:9px 0 4px" href="'+dir(c.lat,c.lng)+'" target="_blank" rel="noopener">Itinéraire vers '+c.n+' ↗</a>'
+      +(s.n?'<div class="llist">'+rows+more+'</div>':'');
+
+    L.marker([c.lat,c.lng],{icon,zIndexOffset:200}).addTo(medLayer)
+      .bindPopup(popup,{maxWidth:320,minWidth:260,maxHeight:330,className:'cmn-pop'});
+  });
+
+  const tb=document.querySelector('#ptable tbody'); tb.innerHTML='';
+  [...COMMUNES].sort((a,b)=>b.p-a.p).forEach(c=>{
+    const t=tierOf(c.p), s=stats[c.n];
+    tb.insertAdjacentHTML('beforeend',
+      '<tr><td><span class="cmn">'+c.n+'</span><br><span class="mini"><span class="dot" style="background:'+t.color+'"></span>'+t.name+'</span></td>'
+      +'<td class="r price">'+fmtM2(c.p)+'</td>'
+      +'<td class="r"><span class="price">'+(s.n||'—')+'</span>'+(s.stale?'<br><span class="mini" style="color:var(--warn)">'+s.stale+' ⏳</span>':'')+'</td></tr>');
+  });
+  const lg=document.getElementById('legend'); lg.innerHTML='';
+  TIERS.forEach(t=>{const rng=t.min>=6000?'≥ 6 000 €/m²':t.min>=5500?'5 500–5 999':t.min>=5000?'5 000–5 499':'< 5 000 €/m²';
+    lg.insertAdjacentHTML('beforeend','<div class="legend-row"><span class="swatch" style="background:'+t.color+'"></span><span><b>'+t.name+'</b> · '+rng+'</span></div>');});
+
+  const st=document.getElementById('status'), tx=document.getElementById('status-txt');
+  if(live){st.classList.add('on');tx.textContent='En direct · '+listings.length+' biens · maj '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+  else{st.classList.remove('on');tx.textContent='Instantané · '+listings.length+' biens (live non branché)';}
+}
+
+async function loadLive(){
+  if(!SUPABASE_URL||!SUPABASE_ANON_KEY){render(SNAPSHOT,false);return;}
+  try{
+    const q=SUPABASE_URL+'/rest/v1/immo_seen?select=site,url,title,commune,price,price_num,first_seen,last_seen,alerted_stale&order=last_seen.desc&limit=3000';
+    const res=await fetch(q,{headers:{apikey:SUPABASE_ANON_KEY,Authorization:'Bearer '+SUPABASE_ANON_KEY}});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const rows=await res.json(), now=Date.now(), DAY=86400000;
+    const listings=rows.filter(r=>r.commune&&cmap[r.commune])
+      .filter(r=>!r.last_seen||(now-new Date(r.last_seen))/DAY<=ACTIVE_DAYS)
+      .map(r=>({c:r.commune,src:r.site,price:r.price_num??null,url:r.url||'',
+        stale:!!r.alerted_stale||(r.first_seen&&(now-new Date(r.first_seen))/DAY>=STALE_DAYS)}));
+    render(listings.length?listings:SNAPSHOT, listings.length>0);
+  }catch(e){console.warn('Live KO:',e.message);render(SNAPSHOT,false);}
+}
+loadLive();
+</script>
+</body>
+</html>

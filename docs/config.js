@@ -1,0 +1,2 @@
+window.SUPA_URL = "https://fsobyxgboeelxjfikegk.supabase.co";
+window.SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzb2J5eGdib2VlbHhqZmlrZWdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyOTk4NjQsImV4cCI6MjA5Nzg3NTg2NH0.xru2MSAkviBX5zYTyTYULGjQ7UhBxDam1X8ROQbjSD0";
