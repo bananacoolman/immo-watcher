@@ -129,7 +129,7 @@ async function geoEnrich() {
       const geo = {};
       if (c) { geo.lat = c.lat; geo.lng = c.lng; geo.geo_source = 'page'; page++; saved = true; }
       else if (s) { geo.lat = s.lat; geo.lng = s.lng; geo.secteur = s.name; geo.geo_source = 'texte'; secteurP++; saved = true; }
-      if (surface && (!r.price_num || m2Plausible(r.price_num, surface))) { geo.surface = surface; surf++; }
+      if (surface && (!r.price_num || m2Plausible(r.price_num, surface, r.commune))) { geo.surface = surface; surf++; }
       if (!env.debug && (saved || surface)) await saveGeo(r.site, r.listing_id, geo);
     } catch { /* page indisponible */ }
     if (!saved && !env.debug) await saveGeo(r.site, r.listing_id, {}); // tampon geo_at -> pas de re-essai

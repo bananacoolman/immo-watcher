@@ -26,11 +26,14 @@ export function parseSurface(text = '') {
   return null;
 }
 
-// Plausibilite d'un couple prix/surface (rejette les €/m² aberrants).
-export function m2Plausible(price, surface) {
+// Plausibilite d'un couple prix/surface, RELATIVE au marche de la commune.
+// Un €/m² > 2x ou < 0,5x le prix marche local = surface quasi surement fausse.
+export function m2Plausible(price, surface, commune) {
   if (!price || !surface) return false;
   const m2 = price / surface;
-  return m2 >= 1000 && m2 <= 25000;
+  const ref = MARKET_M2[commune];
+  if (ref) return m2 >= ref * 0.5 && m2 <= ref * 2.0;
+  return m2 >= 1500 && m2 <= 20000; // repli sans reference commune
 }
 
 // Renvoie un objet { ratio, pct, label } comparant le prix/m² du bien au marche
@@ -41,8 +44,8 @@ export function marketEval(l) {
   if (!ref || price == null) return null;
   const surf = l.surface || parseSurface(l.title || '');
   if (!surf) return null;
+  if (!m2Plausible(price, surf, l.commune)) return null;  // surface douteuse vs marche -> rien
   const m2 = price / surf;
-  if (m2 < 1000 || m2 > 25000) return null;  // surface douteuse -> on n'affiche rien
   const ratio = m2 / ref;
   const pct = Math.round((ratio - 1) * 100);
   let label = 'dans le marche';
