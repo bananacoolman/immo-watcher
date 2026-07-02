@@ -224,12 +224,13 @@ function render(listings,live){
       lat+=Math.sin(a)*r; lng+=Math.cos(a)*r/0.72;
     }
     const tag=exact?'📍 position exacte':(l.secteur?('≈ '+l.secteur):'≈ secteur');
-    const m2=(l.surface&&l.price)?Math.round(l.price/l.surface):null;
+    const m2raw=(l.surface&&l.price)?Math.round(l.price/l.surface):null;
+    const m2=(m2raw&&m2raw>=1000&&m2raw<=25000)?m2raw:null;   // masque les €/m² aberrants
     const icon=L.divIcon({html:'<div class="lst'+(l.stale?' stale':'')+(exact?' exact':'')+'"></div>',className:'',iconSize:[14,14],iconAnchor:[7,7]});
     const link=l.url?'<a class="pp-btn ghost" href="'+l.url+'" target="_blank" rel="noopener">Annonce ↗</a>':'';
     L.marker([lat,lng],{icon,zIndexOffset:80}).addTo(listingLayer).bindPopup(
       '<div class="pp-src">'+(l.src||'—')+'</div><div class="pp-price">'+fmtK(l.price)+(m2?' <span style="font-size:12px;color:var(--muted)">· '+m2.toLocaleString('fr-FR')+' €/m²</span>':'')+'</div>'
-      +'<div class="pp-cmn">'+l.c+' · '+tag+(l.surface?' · '+l.surface+' m²':'')+'</div>'+(l.stale?'<div class="pp-badge">⏳ mandat qui traîne</div>':'')
+      +'<div class="pp-cmn">'+l.c+' · '+tag+(m2?' · '+l.surface+' m²':'')+'</div>'+(l.stale?'<div class="pp-badge">⏳ mandat qui traîne</div>':'')
       +'<div class="pp-actions">'+link+'<a class="pp-btn gold" href="'+dir(lat,lng)+'" target="_blank" rel="noopener">Itinéraire ↗</a></div>');
   });
 
