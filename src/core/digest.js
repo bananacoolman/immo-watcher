@@ -5,6 +5,7 @@ import { findMultiMandat } from './multimandat.js';
 const DAY = 86400000;
 const eur = (n) => n == null ? '?' : n >= 1e6 ? (n / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: n % 1e6 ? 1 : 0 }) + ' M€' : Math.round(n / 1000) + ' k€';
 const esc = (s = '') => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+const link = (r, label) => (r && r.url) ? `<a href="${esc(r.url)}">${label}</a>` : label;
 
 // Construit le message Telegram (HTML) du digest hebdo a partir de toutes les lignes.
 export function buildDigest(rows, nowMs = Date.now()) {
@@ -54,23 +55,23 @@ export function buildDigest(rows, nowMs = Date.now()) {
   if (News.length) {
     L.push('');
     L.push('<b>✨ Nouveautés</b>');
-    News.slice(0, 8).forEach(r => L.push(`• ${esc(r.commune)} — ${eur(r.price_num)} <i>${esc(r.site)}</i>`));
+    News.slice(0, 8).forEach(r => L.push(`• ${link(r, esc(r.commune))} — ${eur(r.price_num)} <i>${esc(r.site)}</i>`));
     if (News.length > 8) L.push(`  … +${News.length - 8} autres`);
   }
   if (drops.length) {
     L.push('');
     L.push('<b>🔻 Plus grosses baisses</b>');
-    drops.slice(0, 6).forEach(r => L.push(`• ${esc(r.commune)} — ${eur(r.before)} → <b>${eur(r.now)}</b> (-${r.pct}%) <i>${esc(r.site)}</i>`));
+    drops.slice(0, 6).forEach(r => L.push(`• ${link(r, esc(r.commune))} — ${eur(r.before)} → <b>${eur(r.now)}</b> (-${r.pct}%) <i>${esc(r.site)}</i>`));
   }
   if (newlyStale.length) {
     L.push('');
     L.push('<b>⏳ Mandats à recontacter (≥ ' + env.staleDays + ' j)</b>');
-    newlyStale.slice(0, 6).forEach(r => L.push(`• ${esc(r.commune)} — ${eur(r.price_num)} <i>${esc(r.site)}</i>`));
+    newlyStale.slice(0, 6).forEach(r => L.push(`• ${link(r, esc(r.commune))} — ${eur(r.price_num)} <i>${esc(r.site)}</i>`));
   }
   if (multi.length) {
     L.push('');
     L.push('<b>🎯 Multi-mandat (vendeurs sans doute déçus)</b>');
-    multi.slice(0, 6).forEach(c => L.push(`• ${esc(c.commune)} — ${eur(c.price)} chez <b>${c.sites.length}</b> agences (${c.sites.map(esc).join(', ')})`));
+    multi.slice(0, 6).forEach(c => L.push(`• ${esc(c.commune)} — ${eur(c.price)} chez <b>${c.sites.length}</b> agences : ${c.items.slice(0,4).map(it => link(it, esc(it.site))).join(' · ')}`));
   }
 
   L.push('');
