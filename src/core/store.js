@@ -18,7 +18,7 @@ export async function getRecords(site) {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseClient()
       .from('immo_seen')
-      .select('listing_id, url, title, commune, image, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale, alerted_drop_price')
+      .select('listing_id, url, title, commune, image, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale, alerted_drop_price, lat, lng, secteur, geo_source, geo_at')
       .eq('site', site)
       .range(from, from + pageSize - 1);
     if (error) throw error;
@@ -60,7 +60,7 @@ export async function getAllRows() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseClient()
       .from('immo_seen')
-      .select('site, listing_id, url, title, commune, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale')
+      .select('site, listing_id, url, title, commune, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale, lat, lng, secteur, geo_source, geo_at')
       .range(from, from + pageSize - 1);
     if (error) throw error;
     out.push(...data);
@@ -79,4 +79,15 @@ export async function claimAlert(key) {
     throw error;
   }
   return true;
+}
+
+// Enregistre (ou tamponne) la geoloc d'un bien. Toujours horodate (geo_at)
+// pour ne pas re-tenter indefiniment les pages sans coordonnees.
+export async function saveGeo(site, listingId, geo = {}) {
+  const { error } = await supabaseClient()
+    .from('immo_seen')
+    .update({ ...geo, geo_at: new Date().toISOString() })
+    .eq('site', site)
+    .eq('listing_id', listingId);
+  if (error) throw error;
 }

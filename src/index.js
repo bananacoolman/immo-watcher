@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { runOnce, runDigest } from './core/run.js';
+import { runOnce, runDigest, runGeoProbe } from './core/run.js';
 import { env } from './config.js';
 
 function checkEnv() {
@@ -16,6 +16,11 @@ async function main() {
 
   if (env.mode === 'digest') {
     await runDigest();
+    process.exit(0);
+  }
+
+  if (env.mode === 'geo-probe') {
+    await runGeoProbe();
     process.exit(0);
   }
 

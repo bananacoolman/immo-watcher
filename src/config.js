@@ -36,6 +36,10 @@ export const env = {
   activeDays: parseInt(process.env.ACTIVE_DAYS || '4', 10),          // "encore en ligne" si revu < N j
   // Ecart au prix marche (#3)
   marketFlagPct: parseFloat(process.env.MARKET_FLAG_PCT || '0.15'),  // +/- 15% = sur/sous-evalue
+  // Geolocalisation (#geo)
+  geoEnrich: process.env.GEO_ENRICH !== '0',
+  geoBudget: parseInt(process.env.GEO_BUDGET || '40', 10),           // pages detail lues par run
+  geoDelayMs: parseInt(process.env.GEO_DELAY_MS || '600', 10),       // politesse entre 2 fetch
   // Bridge e-mail (Leboncoin / Seloger via alertes)
   emailEnabled: process.env.EMAIL_ENABLED === '1',
   imapHost: process.env.IMAP_HOST,
