@@ -205,6 +205,29 @@ map.fitBounds(COMMUNES.map(c=>[c.lat,c.lng]),{padding:[60,60]});
 const medLayer=L.layerGroup().addTo(map);
 const listingLayer=L.layerGroup().addTo(map);
 
+function countUniques(listings){
+  // fusion commune+prix (regle stricte : multi = chaque agence 1 fois)
+  let uniq=0;
+  const byC={};
+  listings.forEach(l=>{(byC[l.c]=byC[l.c]||[]).push(l);});
+  Object.values(byC).forEach(list=>{
+    const sorted=list.slice().sort((a,b)=>(a.price||0)-(b.price||0));
+    let i=0;
+    while(i<sorted.length){
+      const base=sorted[i]; const grp=[base];
+      if(base.price!=null){
+        const tol=Math.max(base.price*0.005,5000);
+        let j=i+1;
+        while(j<sorted.length && sorted[j].price!=null && sorted[j].price-base.price<=tol){ grp.push(sorted[j]); j++; }
+        i=j;
+      } else { i++; }
+      const sset=[...new Set(grp.map(g=>g.src))];
+      uniq += (sset.length>=2 && sset.length===grp.length) ? 1 : grp.length;
+    }
+  });
+  return uniq;
+}
+
 function render(listings,live){
   medLayer.clearLayers(); listingLayer.clearLayers();
   const stats={}; COMMUNES.forEach(c=>stats[c.n]={n:0,loc:0,prices:[],stale:0,items:[]});
@@ -353,8 +376,8 @@ function render(listings,live){
     lg.insertAdjacentHTML('beforeend','<div class="legend-row"><span class="swatch" style="background:'+t.color+'"></span><span><b>'+t.name+'</b> · '+rng+'</span></div>');});
 
   const st=document.getElementById('status'), tx=document.getElementById('status-txt');
-  if(live){st.classList.add('on');tx.textContent='En direct · '+listings.length+' biens · maj '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
-  else{st.classList.remove('on');tx.textContent='Instantané · '+listings.length+' biens (live non branché)';}
+  if(live){const u=countUniques(listings);st.classList.add('on');tx.textContent='En direct · ~'+u+' biens ('+listings.length+' annonces) · maj '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+  else{st.classList.remove('on');tx.textContent='Instantané · '+listings.length+' annonces (live non branché)';}
 }
 
 async function loadLive(){
