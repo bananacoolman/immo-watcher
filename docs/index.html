@@ -224,8 +224,9 @@ function render(listings,live){
       lat+=Math.sin(a)*r; lng+=Math.cos(a)*r/0.72;
     }
     const tag=exact?'📍 position exacte':(l.secteur?('≈ '+l.secteur):'≈ secteur');
+    const ref=cmap[l.c]?cmap[l.c].p:null;
     const m2raw=(l.surface&&l.price)?Math.round(l.price/l.surface):null;
-    const m2=(m2raw&&m2raw>=1000&&m2raw<=25000)?m2raw:null;   // masque les €/m² aberrants
+    const m2=(m2raw&&ref&&m2raw>=ref*0.5&&m2raw<=ref*2.0)?m2raw:null;   // masque si > 2x ou < 0,5x le marche
     const icon=L.divIcon({html:'<div class="lst'+(l.stale?' stale':'')+(exact?' exact':'')+'"></div>',className:'',iconSize:[14,14],iconAnchor:[7,7]});
     const link=l.url?'<a class="pp-btn ghost" href="'+l.url+'" target="_blank" rel="noopener">Annonce ↗</a>':'';
     L.marker([lat,lng],{icon,zIndexOffset:80}).addTo(listingLayer).bindPopup(
