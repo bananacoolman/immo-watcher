@@ -224,11 +224,12 @@ function render(listings,live){
       lat+=Math.sin(a)*r; lng+=Math.cos(a)*r/0.72;
     }
     const tag=exact?'📍 position exacte':(l.secteur?('≈ '+l.secteur):'≈ secteur');
+    const m2=(l.surface&&l.price)?Math.round(l.price/l.surface):null;
     const icon=L.divIcon({html:'<div class="lst'+(l.stale?' stale':'')+(exact?' exact':'')+'"></div>',className:'',iconSize:[14,14],iconAnchor:[7,7]});
     const link=l.url?'<a class="pp-btn ghost" href="'+l.url+'" target="_blank" rel="noopener">Annonce ↗</a>':'';
     L.marker([lat,lng],{icon,zIndexOffset:80}).addTo(listingLayer).bindPopup(
-      '<div class="pp-src">'+(l.src||'—')+'</div><div class="pp-price">'+fmtK(l.price)+'</div>'
-      +'<div class="pp-cmn">'+l.c+' · '+tag+'</div>'+(l.stale?'<div class="pp-badge">⏳ mandat qui traîne</div>':'')
+      '<div class="pp-src">'+(l.src||'—')+'</div><div class="pp-price">'+fmtK(l.price)+(m2?' <span style="font-size:12px;color:var(--muted)">· '+m2.toLocaleString('fr-FR')+' €/m²</span>':'')+'</div>'
+      +'<div class="pp-cmn">'+l.c+' · '+tag+(l.surface?' · '+l.surface+' m²':'')+'</div>'+(l.stale?'<div class="pp-badge">⏳ mandat qui traîne</div>':'')
       +'<div class="pp-actions">'+link+'<a class="pp-btn gold" href="'+dir(lat,lng)+'" target="_blank" rel="noopener">Itinéraire ↗</a></div>');
   });
 
@@ -281,14 +282,14 @@ function render(listings,live){
 async function loadLive(){
   if(!SUPABASE_URL||!SUPABASE_ANON_KEY){render(SNAPSHOT,false);return;}
   try{
-    const q=SUPABASE_URL+'/rest/v1/immo_seen?select=site,url,title,commune,price,price_num,first_seen,last_seen,alerted_stale,lat,lng,secteur,geo_source&order=last_seen.desc&limit=3000';
+    const q=SUPABASE_URL+'/rest/v1/immo_seen?select=site,url,title,commune,price,price_num,first_seen,last_seen,alerted_stale,lat,lng,secteur,geo_source,surface&order=last_seen.desc&limit=3000';
     const res=await fetch(q,{headers:{apikey:SUPABASE_ANON_KEY,Authorization:'Bearer '+SUPABASE_ANON_KEY}});
     if(!res.ok)throw new Error('HTTP '+res.status);
     const rows=await res.json(), now=Date.now(), DAY=86400000;
     const listings=rows.filter(r=>r.commune&&cmap[r.commune])
       .filter(r=>!r.last_seen||(now-new Date(r.last_seen))/DAY<=ACTIVE_DAYS)
       .map(r=>({c:r.commune,src:r.site,price:r.price_num??null,url:r.url||'',
-        lat:r.lat??null,lng:r.lng??null,secteur:r.secteur??null,geo:r.geo_source??null,
+        lat:r.lat??null,lng:r.lng??null,secteur:r.secteur??null,geo:r.geo_source??null,surface:r.surface??null,
         stale:!!r.alerted_stale||(r.first_seen&&(now-new Date(r.first_seen))/DAY>=STALE_DAYS)}));
     render(listings.length?listings:SNAPSHOT, listings.length>0);
   }catch(e){console.warn('Live KO:',e.message);render(SNAPSHOT,false);}
