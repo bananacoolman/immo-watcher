@@ -62,7 +62,9 @@
     padding:1px 7px;margin-top:3px;white-space:nowrap}
   .lst{width:13px;height:13px;background:#0d1b2a;border:1.5px solid var(--gold);transform:rotate(45deg);box-shadow:0 2px 6px rgba(10,22,34,.45)}
   .lst.exact{background:var(--gold);border-color:#fff}
+  .lst.multi{width:16px;height:16px;background:var(--gold);border:2px solid #fff;outline:2px solid var(--gold);box-shadow:0 0 0 3px rgba(201,168,106,.25),0 2px 8px rgba(10,22,34,.5)}
   .lst.stale{border-color:var(--warn);background:#2a2310}
+  .lst.multi.stale{background:var(--warn);outline-color:var(--warn)}
   .leaflet-popup-content-wrapper{background:var(--ink);color:var(--parch);border-radius:9px;border:1px solid var(--line)}
   .leaflet-popup-tip{background:var(--ink);border:1px solid var(--line)}
   .leaflet-popup-content{margin:13px 15px;font-size:13px;line-height:1.5}
@@ -109,8 +111,9 @@
     <div class="rule"></div>
     <div class="sec-label">Légende</div>
     <div id="legend"></div>
-    <div class="legend-row" style="margin-top:12px"><span class="diamond" style="background:var(--gold);border-color:#fff"></span><span>Bien <b>localisé</b> (or plein = adresse exacte)</span></div>
-    <div class="legend-row"><span class="diamond"></span><span>Bien localisé <b>au secteur</b> (position approchée)</span></div>
+    <div class="legend-row" style="margin-top:12px"><span class="diamond" style="background:var(--gold);border-color:#fff"></span><span>Bien localisé — <b>zone de l'annonce</b> (~1 km, position publiée par l'agence)</span></div>
+    <div class="legend-row"><span class="diamond"></span><span>Bien localisé <b>au secteur</b> (quartier détecté dans l'annonce)</span></div>
+    <div class="legend-row"><span class="diamond" style="background:var(--gold);border-color:#fff;outline:2px solid var(--gold)"></span><span><b>🎯 Multi-mandat</b> — même bien chez plusieurs agences (1 seul point)</span></div>
     <div class="legend-row"><span class="swatch" style="background:var(--gold)"></span><span>Clique une commune → biens <b>non localisés</b> + itinéraire</span></div>
     <div class="legend-row"><span style="color:var(--warn);font-weight:700;width:14px;text-align:center">⏳</span><span><b>Mandat qui traîne</b> — à recontacter</span></div>
 
@@ -213,31 +216,77 @@ function render(listings,live){
     else s.items.push(l);            // pas de coords -> reste dans la pastille commune
   });
 
-  // pins précis pour les biens géolocalisés (or plein = exact, contour = secteur)
+  // --- fusion multi-mandat : meme commune + prix proche (0,5%) chez >= 2 agences = 1 seul point ---
+  const groups=[];
+  {
+    const sorted=located.slice().sort((a,b)=> a.c<b.c?-1:a.c>b.c?1:(a.price||0)-(b.price||0));
+    let i=0;
+    while(i<sorted.length){
+      const base=sorted[i]; const grp=[base];
+      if(base.price!=null){
+        const tol=Math.max(base.price*0.005,5000);
+        let j=i+1;
+        while(j<sorted.length && sorted[j].c===base.c && sorted[j].price!=null && sorted[j].price-base.price<=tol){ grp.push(sorted[j]); j++; }
+        i=j;
+      } else i++;
+      groups.push(grp);
+    }
+  }
+
+  // stats de fusion par commune
+  groups.forEach(grp=>{
+    const st=stats[grp[0].c]; if(!st)return;
+    st.uniq=(st.uniq||0)+1;
+    if([...new Set(grp.map(g=>g.src))].length>=2) st.multi=(st.multi||0)+1;
+  });
+
+  // pins : 1 point par bien unique ; grappe multi-agences = 1 point doré cerclé
   const jseen={};
-  located.forEach(l=>{
+  groups.forEach(grp=>{
+    const sites=[...new Set(grp.map(g=>g.src))];
+    const isMulti=sites.length>=2;
+    const l=grp.find(g=>g.geo==='page')||grp[0];   // meilleure position de la grappe
     let lat=l.lat, lng=l.lng;
     const exact=(l.geo==='page');
-    if(!exact){ // secteur / multi-mandat : léger décalage pour éviter la superposition
+    if(!exact){
       const kk=l.c+lat.toFixed(3); const k=(jseen[kk]=(jseen[kk]||0)+1);
       const a=k*2.39996, r=0.0016+(k%4)*0.0009;
       lat+=Math.sin(a)*r; lng+=Math.cos(a)*r/0.72;
     }
-    const tag=exact?'📍 position exacte':(l.secteur?('≈ '+l.secteur):'≈ secteur');
+    const stale=grp.some(g=>g.stale);
+    const tag=exact?'◎ zone de l\'annonce (~1 km)':(l.secteur?('≈ '+l.secteur):'≈ secteur');
     const ref=cmap[l.c]?cmap[l.c].p:null;
-    const m2raw=(l.surface&&l.price)?Math.round(l.price/l.surface):null;
-    const m2=(m2raw&&ref&&m2raw>=ref*0.5&&m2raw<=ref*2.0)?m2raw:null;   // masque si > 2x ou < 0,5x le marche
-    const icon=L.divIcon({html:'<div class="lst'+(l.stale?' stale':'')+(exact?' exact':'')+'"></div>',className:'',iconSize:[14,14],iconAnchor:[7,7]});
-    const link=l.url?'<a class="pp-btn ghost" href="'+l.url+'" target="_blank" rel="noopener">Annonce ↗</a>':'';
-    L.marker([lat,lng],{icon,zIndexOffset:80}).addTo(listingLayer).bindPopup(
-      '<div class="pp-src">'+(l.src||'—')+'</div><div class="pp-price">'+fmtK(l.price)+(m2?' <span style="font-size:12px;color:var(--muted)">· '+m2.toLocaleString('fr-FR')+' €/m²</span>':'')+'</div>'
-      +'<div class="pp-cmn">'+l.c+' · '+tag+(m2?' · '+l.surface+' m²':'')+'</div>'+(l.stale?'<div class="pp-badge">⏳ mandat qui traîne</div>':'')
-      +'<div class="pp-actions">'+link+'<a class="pp-btn gold" href="'+dir(lat,lng)+'" target="_blank" rel="noopener">Itinéraire ↗</a></div>');
+    const withS=grp.find(g=>g.surface&&g.price);
+    const m2raw=withS?Math.round(withS.price/withS.surface):null;
+    const m2=(m2raw&&ref&&m2raw>=ref*0.5&&m2raw<=ref*2.0)?m2raw:null;
+
+    const icon=L.divIcon({
+      html:'<div class="lst'+(stale?' stale':'')+(exact?' exact':'')+(isMulti?' multi':'')+'"></div>',
+      className:'',iconSize:isMulti?[18,18]:[14,14],iconAnchor:isMulti?[9,9]:[7,7]});
+
+    let popup;
+    if(isMulti){
+      const links=grp.filter(g=>g.url).map(g=>'<a class="ra" href="'+g.url+'" target="_blank" rel="noopener">'+(g.src||'annonce')+' ↗</a>').join(' · ');
+      popup='<div class="pp-src">🎯 Multi-mandat · '+sites.length+' agences</div>'
+        +'<div class="pp-price">'+fmtK(l.price)+(m2?' <span style="font-size:12px;color:var(--muted)">· '+m2.toLocaleString('fr-FR')+' €/m²</span>':'')+'</div>'
+        +'<div class="pp-cmn">'+l.c+' · '+tag+'</div>'
+        +'<div class="pp-cmn" style="margin-top:5px">'+links+'</div>'
+        +'<div class="pp-badge" style="color:var(--gold);border-color:var(--gold)">vendeur en mandat simple — lead à recontacter</div>'
+        +(stale?'<div class="pp-badge">⏳ mandat qui traîne</div>':'')
+        +'<div class="pp-actions"><a class="pp-btn gold" href="'+dir(lat,lng)+'" target="_blank" rel="noopener">Itinéraire ↗</a></div>';
+    } else {
+      const link=l.url?'<a class="pp-btn ghost" href="'+l.url+'" target="_blank" rel="noopener">Annonce ↗</a>':'';
+      popup='<div class="pp-src">'+(l.src||'—')+'</div><div class="pp-price">'+fmtK(l.price)+(m2?' <span style="font-size:12px;color:var(--muted)">· '+m2.toLocaleString('fr-FR')+' €/m²</span>':'')+'</div>'
+        +'<div class="pp-cmn">'+l.c+' · '+tag+(m2&&withS?' · '+withS.surface+' m²':'')+'</div>'+(stale?'<div class="pp-badge">⏳ mandat qui traîne</div>':'')
+        +'<div class="pp-actions">'+link+'<a class="pp-btn gold" href="'+dir(lat,lng)+'" target="_blank" rel="noopener">Itinéraire ↗</a></div>';
+    }
+    L.marker([lat,lng],{icon,zIndexOffset:isMulti?120:80}).addTo(listingLayer)
+      .bindPopup(popup,{maxWidth:300});
   });
 
   COMMUNES.forEach(c=>{
     const t=tierOf(c.p), s=stats[c.n], size=48+(c.p-4500)/2500*26;
-    const cntTxt=s.n?(s.n+' à vendre'+(s.loc?' · '+s.loc+'📍':'')):'aucun';
+    const cntTxt=s.n?(s.n+' annonces'+(s.uniq?' · '+s.uniq+'📍':'')+(s.multi?' · '+s.multi+'🎯':'')):'aucun';
     const html='<div style="display:flex;flex-direction:column;align-items:center">'
       +'<div class="med" style="width:'+size+'px;height:'+size+'px;background:'+t.color+'">'
       +'<span class="pm">'+(c.p/1000).toLocaleString('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1})+'k</span><span class="pu">€/m²</span></div>'
