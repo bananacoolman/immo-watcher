@@ -27,9 +27,13 @@ export function findMultiMandat(rows, nowMs = Date.now()) {
            active[j].price_num - base.price_num <= tol) {
       group.push(active[j]); j++;
     }
-    // distinct sites dans la grappe
+    // distinct sites dans la grappe — vrai multi-mandat = chaque agence UNE fois.
+    // Si une agence apparait 2x dans la fenetre de prix, la zone est ambigue
+    // (plusieurs biens distincts au meme prix) : on saute TOUTE la fenetre.
     const sites = [...new Set(group.map(g => g.site))];
-    if (sites.length >= 2) {
+    if (group.length >= 2 && sites.length < group.length) {
+      i = j;                    // fenetre ambigue -> aucun cluster ici
+    } else if (sites.length >= 2) {
       clusters.push({
         commune: base.commune,
         price: Math.round(group.reduce((s, g) => s + g.price_num, 0) / group.length),
