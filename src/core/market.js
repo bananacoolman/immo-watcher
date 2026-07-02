@@ -25,7 +25,7 @@ export function marketEval(l) {
   const ref = MARKET_M2[l.commune];
   const price = l.priceNum ?? null;
   if (!ref || price == null) return null;
-  const surf = parseSurface(l.title || '');
+  const surf = l.surface || parseSurface(l.title || '');
   if (!surf) return null;
   const m2 = price / surf;
   const ratio = m2 / ref;

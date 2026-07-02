@@ -7,6 +7,7 @@ import { evaluate } from './signals.js';
 import { findMultiMandat, clusterKey } from './multimandat.js';
 import { buildDigest } from './digest.js';
 import { extractCoordsFromHtml, detectSecteur } from './geo.js';
+import { parseSurface } from './market.js';
 import { getHtml, closeBrowser } from './http.js';
 import { env } from '../config.js';
 
@@ -113,30 +114,28 @@ async function geoEnrich() {
     secteurT++;
   }
 
-  // 2) coords exactes depuis la page detail — budget limite, jamais deja tente
+  // 2) coords exactes + secteur (description) + surface depuis la page detail
   const todo = rows.filter((r) => r.geo_source !== 'page' && !r.geo_at).slice(0, env.geoBudget);
-  let page = 0, secteurP = 0;
+  let page = 0, secteurP = 0, surf = 0;
   for (const r of todo) {
     let saved = false;
     try {
       const html = await getHtml(r.url, { retries: 1, timeoutMs: 20000 });
+      // texte complet de la page (la description est loin, apres le menu)
+      const text = (r.title || '') + ' ' + String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 60000);
       const c = extractCoordsFromHtml(html);
-      if (c) {
-        if (!env.debug) await saveGeo(r.site, r.listing_id, { lat: c.lat, lng: c.lng, geo_source: 'page' });
-        page++; saved = true;
-      } else if (!r.secteur) {
-        const txt = (r.title || '') + ' ' + String(html).replace(/<[^>]+>/g, ' ').slice(0, 20000);
-        const s = detectSecteur(txt, r.commune);
-        if (s) {
-          if (!env.debug) await saveGeo(r.site, r.listing_id, { lat: s.lat, lng: s.lng, secteur: s.name, geo_source: 'texte' });
-          secteurP++; saved = true;
-        }
-      }
+      const s = r.secteur ? null : detectSecteur(text, r.commune);
+      const surface = parseSurface(text);
+      const geo = {};
+      if (c) { geo.lat = c.lat; geo.lng = c.lng; geo.geo_source = 'page'; page++; saved = true; }
+      else if (s) { geo.lat = s.lat; geo.lng = s.lng; geo.secteur = s.name; geo.geo_source = 'texte'; secteurP++; saved = true; }
+      if (surface) { geo.surface = surface; surf++; }
+      if (!env.debug && (saved || surface)) await saveGeo(r.site, r.listing_id, geo);
     } catch { /* page indisponible */ }
     if (!saved && !env.debug) await saveGeo(r.site, r.listing_id, {}); // tampon geo_at -> pas de re-essai
     await sleep(env.geoDelayMs);
   }
-  console.log(`  [geo] secteur/titre: ${secteurT} · coords/page: ${page} · secteur/page: ${secteurP} (budget ${env.geoBudget})`);
+  console.log(`  [geo] secteur/titre: ${secteurT} · coords/page: ${page} · secteur/page: ${secteurP} · surfaces: ${surf} (budget ${env.geoBudget})`);
 }
 
 // Propagation : dans une grappe multi-mandat, un bien geolocalise partage sa
@@ -175,7 +174,7 @@ export async function runGeoProbe() {
         const html = await getHtml(r.url, { retries: 1, timeoutMs: 20000 });
         if (extractCoordsFromHtml(html)) coords++;
         else {
-          const txt = (r.title || '') + ' ' + String(html).replace(/<[^>]+>/g, ' ').slice(0, 20000);
+          const txt = (r.title || '') + ' ' + String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 60000);
           if (detectSecteur(txt, r.commune)) secteur++;
         }
       } catch { /* skip */ }

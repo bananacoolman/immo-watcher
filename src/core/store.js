@@ -60,7 +60,7 @@ export async function getAllRows() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseClient()
       .from('immo_seen')
-      .select('site, listing_id, url, title, commune, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale, lat, lng, secteur, geo_source, geo_at')
+      .select('site, listing_id, url, title, commune, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale, lat, lng, secteur, geo_source, geo_at, surface')
       .range(from, from + pageSize - 1);
     if (error) throw error;
     out.push(...data);
