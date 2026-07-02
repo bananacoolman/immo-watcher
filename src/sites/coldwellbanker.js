@@ -1,18 +1,23 @@
-// Coldwell Banker — portail coldwellbanker.fr (agrege les agences CB locales :
-// Art Realty + Standing Realty a Saint-Paul, etc.). Prix affiches, commune
-// lisible dans l'URL. Pages liste par commune ; detail : <commune>+06+<type>+vente+r<id>.html
+// Coldwell Banker — coldwellbanker.fr (refonte Rails 2026).
+// Index : pages regionales PACA triees par nouveaute + pages commune legacy
+// (certaines redirigent vers la region : le filtre commune du moteur trie).
+// Detail : /vente-immobilier/<type>/france/provence-alpes-cote-d-azur/<commune>-<cp>/<slug>-<id>
 export default {
   name: 'Coldwell Banker',
   enabled: true,
   preferJsonLd: false,
   indexUrls: [
-    'https://www.coldwellbanker.fr/vente+immobilier+saint-paul+com06.html',
-    'https://www.coldwellbanker.fr/vente+immobilier+vence+com06.html',
-    'https://www.coldwellbanker.fr/vente+immobilier+la-colle-sur-loup+com06.html',
-    'https://www.coldwellbanker.fr/vente+immobilier+tourrettes-sur-loup+com06.html',
-    'https://www.coldwellbanker.fr/vente+immobilier+saint-jeannet+com06.html',
-    'https://www.coldwellbanker.fr/vente+immobilier+la-gaude+com06.html',
-    'https://www.coldwellbanker.fr/vente+immobilier+gattieres+com06.html',
+    // region PACA, plus recents d'abord (2 pages = 36 annonces les plus fraiches)
+    'https://www.coldwellbanker.fr/vente-immobilier/biens-immobiliers/france/provence-alpes-cote-d-azur?sort=sort_by_published_at+desc',
+    'https://www.coldwellbanker.fr/vente-immobilier/biens-immobiliers/france/provence-alpes-cote-d-azur?sort=sort_by_published_at+desc&page=2&limit=18',
+    // pages commune (marche pour certaines ; les autres redirigent, sans casse)
+    'https://www.coldwellbanker.fr/immobilier+saint-paul+06.html',
+    'https://www.coldwellbanker.fr/immobilier+vence+06.html',
+    'https://www.coldwellbanker.fr/immobilier+la-colle-sur-loup+06.html',
+    'https://www.coldwellbanker.fr/immobilier+tourrettes-sur-loup+06.html',
+    'https://www.coldwellbanker.fr/immobilier+saint-jeannet+06.html',
+    'https://www.coldwellbanker.fr/immobilier+la-gaude+06.html',
+    'https://www.coldwellbanker.fr/immobilier+gattieres+06.html',
   ],
-  detailPattern: /coldwellbanker\.fr\/[a-z-]+\+06\+[a-z-]+\+vente\+r\d+\.html/i,
+  detailPattern: /coldwellbanker\.fr\/vente-immobilier\/[a-z-]+\/france\/provence-alpes-cote-d-azur\/[a-z-]+-\d{5}\/[a-z0-9-]+-\d+(?:$|\?)/i,
 };
