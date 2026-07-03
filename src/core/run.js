@@ -8,6 +8,7 @@ import { findMultiMandat, clusterKey } from './multimandat.js';
 import { buildDigest } from './digest.js';
 import { extractCoordsFromHtml, detectSecteur } from './geo.js';
 import { parseSurface, m2Plausible } from './market.js';
+import { listClients, matchListing, claimMatch, matchLine } from './clients.js';
 import { getHtml, closeBrowser } from './http.js';
 import { env } from '../config.js';
 
@@ -235,6 +236,34 @@ export async function runOnce() {
     await geoPropagate();
   } catch (e) {
     console.error(`  [geo] erreur : ${e.message}`);
+  }
+
+  // ----- matching acheteurs : biens actifs vs clients actifs -----
+  try {
+    const clients = (await listClients()).filter((c) => c.active);
+    if (clients.length) {
+      const rows = await getAllRows();
+      const now = Date.now();
+      const active = rows.filter((r) => !r.last_seen || (now - new Date(r.last_seen)) / 86400000 <= env.activeDays);
+      let sent = 0;
+      for (const c of clients) {
+        for (const l of active) {
+          const m = matchListing(c, l);
+          if (!m) continue;
+          let fresh;
+          try { fresh = await claimMatch(c.name, l.url); } catch { continue; }
+          if (!fresh) continue;
+          if (env.debug) { console.log(`  [client] match ${c.name}: ${l.url}`); sent++; continue; }
+          try {
+            await sendDigest(`🤝 <b>Match pour ${c.name}</b>\n${matchLine(m)}`);
+            sent++; await sleep(400);
+          } catch (e) { console.warn(`  notif match KO: ${e.message}`); }
+        }
+      }
+      if (sent) console.log(`  [clients] ${sent} match(s) notifie(s)`);
+    }
+  } catch (e) {
+    console.error(`  [clients] erreur : ${e.message}`);
   }
 
   if (env.usePlaywright) await closeBrowser();
