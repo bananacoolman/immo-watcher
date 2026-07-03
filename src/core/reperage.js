@@ -187,8 +187,12 @@ export async function runReperage() {
   for (const u of updates) {
     await kvSet('tg_offset', u.update_id);
     const msg = u.message;
-    if (!msg || !msg.text) continue;
-    if (String(msg.chat.id) !== String(env.telegramChatId)) continue; // seulement ton chat
+    if (!msg || !msg.text) { console.log(`  [skip] update sans texte (type: ${Object.keys(u).filter(k=>k!=='update_id').join(',')})`); continue; }
+    if (String(msg.chat.id) !== String(env.telegramChatId)) {
+      console.log(`  [skip] chat inattendu: recu=${msg.chat.id} attendu=${env.telegramChatId} texte="${(msg.text||'').slice(0,30)}"`);
+      continue;
+    }
+    console.log(`  [msg] "${(msg.text||'').slice(0,60)}"`);
     const m = msg.text.match(/^\/reperage(?:@\w+)?\s+(https?:\/\/\S+)/i);
     if (!m) {
       if (/^\/reperage/i.test(msg.text)) {
