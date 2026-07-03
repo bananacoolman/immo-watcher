@@ -181,7 +181,6 @@ export async function handleReperage(url) {
 
 // ---------- boucle de commande ----------
 export async function runReperage() {
-  if (!ANTHROPIC_KEY) { console.error('ANTHROPIC_API_KEY manquant.'); process.exit(1); }
   const last = parseInt((await kvGet('tg_offset')) || '0', 10);
   const updates = await getUpdates(last ? last + 1 : undefined);
   let handled = 0;
@@ -239,6 +238,10 @@ export async function runReperage() {
     }
     const url = m[1].trim();
     try {
+      if (!ANTHROPIC_KEY) {
+        await send('⚠️ La clé <code>ANTHROPIC_API_KEY</code> n\'est pas configurée (GitHub → Settings → Secrets → Actions). Le repérage photo est indisponible — les commandes /client fonctionnent normalement.');
+        continue;
+      }
       await send('⏳ Repérage en cours (30-60 s)…');
       const r = await handleReperage(url);
       console.log(`reperage ${url}: ${r}`);
