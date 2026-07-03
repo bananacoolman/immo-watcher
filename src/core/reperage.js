@@ -30,7 +30,7 @@ async function getUpdates(offset) {
 
 async function send(text) {
   await tgCall('sendMessage', {
-    chat_id: env.telegramChatId, text, parse_mode: 'HTML', disable_web_page_preview: true,
+    chat_id: env.telegramChat, text, parse_mode: 'HTML', disable_web_page_preview: true,
   });
 }
 
@@ -188,8 +188,8 @@ export async function runReperage() {
     await kvSet('tg_offset', u.update_id);
     const msg = u.message;
     if (!msg || !msg.text) { console.log(`  [skip] update sans texte (type: ${Object.keys(u).filter(k=>k!=='update_id').join(',')})`); continue; }
-    if (String(msg.chat.id) !== String(env.telegramChatId)) {
-      console.log(`  [skip] chat inattendu: recu=${msg.chat.id} attendu=${env.telegramChatId} texte="${(msg.text||'').slice(0,30)}"`);
+    if (String(msg.chat.id) !== String(env.telegramChat)) {
+      console.log(`  [skip] chat inattendu: recu=${msg.chat.id} attendu=${env.telegramChat} texte="${(msg.text||'').slice(0,30)}"`);
       continue;
     }
     console.log(`  [msg] "${(msg.text||'').slice(0,60)}"`);
