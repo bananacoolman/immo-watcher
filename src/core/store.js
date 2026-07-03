@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { env } from '../config.js';
 
 let _client = null;
-function supabaseClient() {
+export function supabaseClient() {
   if (!_client) {
     _client = createClient(env.supabaseUrl, env.supabaseKey, {
       auth: { persistSession: false },

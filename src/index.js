@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { runOnce, runDigest, runGeoProbe } from './core/run.js';
+import { runReperage } from './core/reperage.js';
 import { env } from './config.js';
 
 function checkEnv() {
@@ -21,6 +22,11 @@ async function main() {
 
   if (env.mode === 'geo-probe') {
     await runGeoProbe();
+    process.exit(0);
+  }
+
+  if (env.mode === 'reperage') {
+    await runReperage();
     process.exit(0);
   }
 
