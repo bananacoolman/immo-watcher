@@ -26,7 +26,11 @@ export function matchCommune(text = '') {
     .replace(/saintpauldevenceetsesenvirons/g, ' ')
     .replace(/etsesenvirons/g, ' ')
     .replace(/etenvirons/g, ' ')
-    .replace(/andsurroundings/g, ' ');
+    .replace(/andsurroundings/g, ' ')
+    .replace(/provencealpescotedazur/g, ' ')
+    .replace(/provence/g, ' ')
+    .replace(/cotedazur/g, ' ')
+    .replace(/frenchriviera/g, ' ');
   // Etend les abreviations AVANT le test (sinon "stpauldevence" matcherait "vence").
   n = n
     .replace(/stpauldevence/g, 'saintpauldevence')

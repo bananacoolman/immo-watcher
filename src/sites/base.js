@@ -90,9 +90,15 @@ function fromAnchors($, baseUrl, detailPattern) {
     const text = $card.text().replace(/\s+/g, ' ').trim();
     const $img = $card.find('img').first();
     const image = abs($img.attr('data-src') || $img.attr('src') || '', baseUrl);
-    const title =
+    let title =
       ($(a).attr('title') || $(a).text() || $img.attr('alt') || '')
         .replace(/\s+/g, ' ').trim().slice(0, 140);
+    // titre charabia (hash d'image, attribution...) -> on derive du slug de l'URL
+    if (!title || /\b[0-9a-f]{12,}\b/i.test(title) || /\boriginal\b.*attribut/i.test(title)) {
+      const slug = (url.split('/').filter(Boolean).pop() || '')
+        .replace(/-\d+$/, '').replace(/[-_]+/g, ' ').trim();
+      if (slug) title = (slug.charAt(0).toUpperCase() + slug.slice(1)).slice(0, 140);
+    }
 
     const pv = priceFromCard($, $card);
     out.push({
