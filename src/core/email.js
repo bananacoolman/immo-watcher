@@ -13,6 +13,12 @@ const PORTALS = [
     looksAd: /(ventes_immobilieres|\/ad\/|\/\d{7,})/i,
   },
   {
+    name: 'PAP',
+    sender: /pap\.fr|particulier\s*(a|à)\s*particulier/i,
+    adHref: /pap\.fr/i,
+    looksAd: /\/annonces?\/[a-z0-9-]+-r?\d{6,}/i,
+  },
+  {
     name: 'Seloger',
     sender: /seloger/i,
     adHref: /seloger\.com|links\.seloger|sl\.seloger/i,

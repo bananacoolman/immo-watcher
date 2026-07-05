@@ -5,7 +5,7 @@
 // Detail : pap.fr/annonces/<slug>-r<id>
 export default {
   name: 'PAP',
-  enabled: true,
+  enabled: false,  // PAP bloque les IP GitHub (403/timeout) -> passage par le bridge e-mail
   preferJsonLd: false,
   needsJs: true,   // PAP bloque les requetes simples (403) -> navigateur complet
   indexUrls: [
