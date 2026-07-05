@@ -27,7 +27,8 @@ export const env = {
   keepUnknownPrice: process.env.KEEP_UNKNOWN_PRICE !== '0',
   // Signaux "mandats qui trainent"
   signalsEnabled: process.env.SIGNALS_ENABLED !== '0',   // actif par defaut
-  staleDays: parseInt(process.env.STALE_DAYS || '75', 10),       // ancien depuis X jours
+  staleDays: parseInt(process.env.STALE_DAYS || '75', 10),
+  papStaleDays: parseInt(process.env.PAP_STALE_DAYS || '45', 10), // particulier qui s'epuise -> approche mandat       // ancien depuis X jours
   dropPct: parseFloat(process.env.DROP_PCT || '0.07'),           // baisse >= 7%
   reappearGapDays: parseInt(process.env.REAPPEAR_GAP_DAYS || '5', 10), // disparu puis revenu
   // Multi-mandat : meme bien (commune + prix proche) chez plusieurs agences

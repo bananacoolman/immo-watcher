@@ -70,6 +70,15 @@ export async function notifySignal(a) {
       l.title ? `📝 ${esc(l.title)}` : null,
       link,
     ];
+  } else if (a.kind === 'stale' && l.site === 'PAP') {
+    lines = [
+      `🎣 <b>Particulier qui s'épuise — PAP</b>`,
+      loc,
+      l.price ? `💶 ${esc(l.price)}` : null,
+      `📅 vend seul depuis ${a.days} j — moment idéal pour proposer un mandat`,
+      l.title ? `📝 ${esc(l.title)}` : null,
+      link,
+    ];
   } else if (a.kind === 'stale') {
     lines = [
       `⏳ <b>Mandat qui traîne — ${esc(l.site)}</b>`,

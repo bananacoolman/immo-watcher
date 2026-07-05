@@ -11,10 +11,13 @@ import lacanopee from './lacanopee.js';
 import lemasprovencal from './lemasprovencal.js';
 import brison from './brison.js';
 import tslimmo from './tslimmo.js';
+import pap from './pap.js';
 
 export const SITES = [
   // Grandes enseignes
   johntaylor, sothebys, savills, zingraff, wretman, engelvolkers, coldwellbanker,
   // Agences locales (moteur bObcat)
   saintpaulproperties, realimmo, lacanopee, lemasprovencal, brison, tslimmo,
+  // Particuliers (vendeurs sans mandat)
+  pap,
 ].filter((s) => s.enabled);

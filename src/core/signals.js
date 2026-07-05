@@ -63,7 +63,8 @@ export function evaluate(rec, l, nowIso, seeding) {
 
   // Anciennete : en ligne depuis >= staleDays (une seule alerte)
   const ageDays = daysBetween(nowIso, firstSeen);
-  if (!seeding && ageDays >= env.staleDays && !alertedStale) {
+  const staleThreshold = l.site === 'PAP' ? env.papStaleDays : env.staleDays;
+  if (!seeding && ageDays >= staleThreshold && !alertedStale) {
     alerts.push({ kind: 'stale', l, days: Math.round(ageDays), initial, price });
     alertedStale = true;
   }
