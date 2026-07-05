@@ -18,7 +18,8 @@
     "dotenv": "^16.4.5",
     "imapflow": "^1.0.171",
     "mailparser": "^3.7.1",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "pdfkit": "^0.19.1"
   },
   "optionalDependencies": {
     "playwright": "^1.47.0"

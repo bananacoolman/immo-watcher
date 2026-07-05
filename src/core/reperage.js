@@ -218,6 +218,23 @@ export async function runReperage() {
         } catch (e) { await send('⚠️ ' + esc(e.message)); }
         continue;
       }
+      if (/^\/rapport\b/i.test(msg.text)) {
+        try {
+          const { parseRapportCommand, buildRapportData, generatePdf, sendPdf } = await import('./rapport.js');
+          const q = parseRapportCommand(msg.text);
+          if (!q) {
+            await send('Usage : <code>/rapport Vence 250m2</code> (surface et prix optionnels : <code>/rapport Saint-Paul 300m2 2.5M</code>)');
+            continue;
+          }
+          await send('⏳ Génération du rapport ' + esc(q.commune) + '…');
+          const rows = await getAllRows();
+          const data = buildRapportData(rows, q.commune, { surface: q.surface, price: q.price });
+          const pdf = await generatePdf(data);
+          const fname = 'rapport-' + q.commune.toLowerCase().replace(/[^a-z]+/g, '-') + '.pdf';
+          await sendPdf(pdf, fname, `📊 Rapport marché — ${q.commune} · ${data.stock} biens observés`);
+        } catch (e) { await send('⚠️ Rapport impossible : ' + esc(e.message)); }
+        continue;
+      }
       if (/^\/client\b/i.test(msg.text)) {
         try {
           const c = parseClientCommand(msg.text);
