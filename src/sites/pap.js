@@ -7,6 +7,7 @@ export default {
   name: 'PAP',
   enabled: true,
   preferJsonLd: false,
+  needsJs: true,   // PAP bloque les requetes simples (403) -> navigateur complet
   indexUrls: [
     'https://www.pap.fr/annonce/vente-maisons-saint-paul-de-vence-06570-g8849',
     'https://www.pap.fr/annonce/vente-maisons-vence-06140-g8746',
