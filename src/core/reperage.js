@@ -5,7 +5,7 @@
 import { env } from '../config.js';
 import { getHtml } from './http.js';
 import { supabaseClient } from './store.js';
-import { parseClientCommand, saveClient, listClients, setClientActive, deleteClient, searchStock, criteriaLine, matchLine, claimMatch } from './clients.js';
+import { parseClientCommand, saveClient, listClients, setClientActive, deleteClient, searchStock, criteriaLine, claimMany, telegramList, formButton } from './clients.js';
 import { getAllRows } from './store.js';
 
 const TG = (m) => `https://api.telegram.org/bot${env.telegramToken}/${m}`;
@@ -28,9 +28,10 @@ async function getUpdates(offset) {
   return tgCall('getUpdates', { offset, timeout: 0, allowed_updates: ['message'] });
 }
 
-async function send(text) {
+async function send(text, buttons = null) {
   await tgCall('sendMessage', {
     chat_id: env.telegramChat, text, parse_mode: 'HTML', disable_web_page_preview: true,
+    ...(buttons ? { reply_markup: { inline_keyboard: buttons } } : {}),
   });
 }
 
@@ -200,12 +201,18 @@ export async function runReperage() {
         continue;
       }
       // ----- commandes clients -----
+      if (/^\/(nouveau|start)\b/i.test(msg.text) || /^\/client(@\w+)?\s*$/i.test(msg.text)) {
+        await send('📝 Touchez le bouton pour remplir les critères du client. La liste des biens arrive ici dès l\'enregistrement.',
+          [[formButton()]]);
+        continue;
+      }
       if (/^\/clients\b/i.test(msg.text)) {
         try {
           const cs = await listClients();
-          if (!cs.length) { await send('Aucun client enregistré. Ajoute avec <code>/client Nom budget 1-2M communes Vence</code>'); continue; }
-          const lines = cs.map((c) => `${c.active ? '🟢' : '⚪️'} <b>${esc(c.name)}</b> — ${criteriaLine(c)}`);
-          await send('👥 <b>Clients</b>\n' + lines.join('\n'));
+          if (!cs.length) { await send('Aucun client enregistré pour le moment.', [[formButton()]]); continue; }
+          const lines = cs.map((c) => `${c.active ? '🟢' : '⚪️'} <b>${esc(c.name)}</b> — ${esc(criteriaLine(c))}`);
+          await send('👥 <b>Clients</b>\n' + lines.join('\n'),
+            [[formButton(), formButton('📋 Gérer / modifier', env.clientsPageUrl)]]);
         } catch (e) { await send('⚠️ ' + esc(e.message)); }
         continue;
       }
@@ -239,19 +246,15 @@ export async function runReperage() {
         try {
           const c = parseClientCommand(msg.text);
           if (!c || (!c.budget_min && !c.budget_max && !c.communes && !c.surface_min && !c.keywords)) {
-            await send('Usage : <code>/client Nom budget 1.5-2.5M communes Vence,Saint-Paul surface 200+ mots-cles piscine,vue mer</code>\n(chaque critère est optionnel)');
+            await send('Le plus simple : le formulaire 👇\n\n(ou en une ligne : <code>/client Nom budget 1.5-2.5M communes Vence,Saint-Paul surface 200+ mots-cles piscine,vue mer</code>)', [[formButton()]]);
             continue;
           }
           await saveClient(c);
           const rows = await getAllRows();
           const matches = searchStock(c, rows);
-          // marquer les matchs du stock comme deja vus (la reponse ci-dessous les liste ;
-          // la veille ne notifiera que les NOUVEAUX biens a venir)
-          for (const m2 of matches) { try { await claimMatch(c.name, m2.l.url); } catch { /* ok */ } }
-          const head = `✅ Client <b>${esc(c.name)}</b> enregistré\n${criteriaLine(c)}\n\n🔎 <b>${matches.length} bien(s) en stock correspondent :</b>`;
-          const body = matches.slice(0, 15).map(matchLine).join('\n');
-          const more = matches.length > 15 ? `\n… +${matches.length - 15} autres` : '';
-          await send(head + (matches.length ? '\n' + body + more : '\nAucun pour le moment — la veille est active, tu seras notifié dès qu\'un bien sortira.'));
+          // la veille ne notifiera ensuite que les NOUVEAUX biens
+          try { await claimMany(c.name, matches.map((m2) => m2.l.url)); } catch { /* ok */ }
+          await send(telegramList(c, matches, env.clientsPageUrl, 'new'));
         } catch (e) { await send('⚠️ ' + esc(e.message)); }
         continue;
       }

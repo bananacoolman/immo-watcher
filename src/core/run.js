@@ -1,14 +1,15 @@
 import { SITES } from '../sites/index.js';
 import { genericScrape } from '../sites/base.js';
 import { getEmailListings } from './email.js';
-import { getRecords, saveRows, getAllRows, claimAlert, saveGeo } from './store.js';
+import { getRecords, saveRows, getAllRows, claimAlert, saveGeo, saveDescription, blankDescription } from './store.js';
+import { extractDescription, genericDescriptions } from './description.js';
 import { notify, notifySignal, notifyMulti, sendDigest } from './telegram.js';
 import { evaluate } from './signals.js';
 import { findMultiMandat, clusterKey } from './multimandat.js';
 import { buildDigest } from './digest.js';
 import { extractCoordsFromHtml, detectSecteur } from './geo.js';
 import { parseSurface, m2Plausible } from './market.js';
-import { listClients, matchListing, claimMatch, matchLine } from './clients.js';
+import { listClients, claimMany, claimedByClient, matchLine, searchStock, markSeeded, telegramList, groupSameProperty } from './clients.js';
 import { getHtml, closeBrowser } from './http.js';
 import { env } from '../config.js';
 
@@ -128,10 +129,11 @@ async function geoEnrich() {
       const s = r.secteur ? null : detectSecteur(text, r.commune);
       const surface = parseSurface(text);
       const geo = {};
+      if (r.description == null) geo.description = extractDescription(html);
       if (c) { geo.lat = c.lat; geo.lng = c.lng; geo.geo_source = 'page'; page++; saved = true; }
       else if (s) { geo.lat = s.lat; geo.lng = s.lng; geo.secteur = s.name; geo.geo_source = 'texte'; secteurP++; saved = true; }
       if (surface && (!r.price_num || m2Plausible(r.price_num, surface, r.commune))) { geo.surface = surface; surf++; }
-      if (!env.debug && (saved || surface)) await saveGeo(r.site, r.listing_id, geo);
+      if (!env.debug && (saved || surface || geo.description != null)) await saveGeo(r.site, r.listing_id, geo);
     } catch { /* page indisponible */ }
     if (!saved && !env.debug) await saveGeo(r.site, r.listing_id, {}); // tampon geo_at -> pas de re-essai
     await sleep(env.geoDelayMs);
@@ -155,6 +157,30 @@ async function geoPropagate() {
     }
   }
   if (n) console.log(`  [geo] propagation multi-mandat: ${n}`);
+}
+
+// Descriptions du stock deja connu (les nouvelles annonces sont lues par
+// geoEnrich). Budget limite par passage ; une seule lecture par annonce.
+async function descEnrich() {
+  if (!env.geoEnrich) return;
+  const now = Date.now();
+  const all = await getAllRows();
+  const todo = all.filter((r) => isActive(r, now) && r.description == null).slice(0, env.descBudget);
+  let n = 0;
+  for (const r of todo) {
+    let d = '';
+    try { d = extractDescription(await getHtml(r.url, { retries: 1, timeoutMs: 20000 })); } catch { /* page indisponible */ }
+    if (!env.debug) { try { await saveDescription(r.site, r.listing_id, d); } catch { /* migration 7 absente */ return; } }
+    r.description = d;
+    if (d) n++;
+    await sleep(env.geoDelayMs);
+  }
+  // slogans d'agence repetes -> neutralises (sinon "piscine" partout)
+  let g = 0;
+  for (const x of genericDescriptions(all)) {
+    if (!env.debug) { try { await blankDescription(x.site, x.description); g++; } catch { /* ignore */ } }
+  }
+  if (todo.length || g) console.log(`  [desc] ${n}/${todo.length} descriptions lues${g ? ` · ${g} texte(s) generique(s) neutralise(s)` : ''} · reste ${Math.max(0, all.filter((r) => isActive(r, now) && r.description == null).length - todo.length)}`);
 }
 
 // Mode sonde (MODE=geo-probe) : mesure, agence par agence, le taux de reussite
@@ -202,6 +228,67 @@ async function processEmail() {
   return total;
 }
 
+// Matching acheteurs : biens en vente vs clients actifs.
+// Client nouveau ou modifie (seeded_at vide) : UN message avec les biens deja
+// en vente (normalement deja envoye par la page des l'enregistrement ; le bot
+// ne prend le relais que si cet envoi n'a pas eu lieu). Ensuite : un message
+// par client quand de NOUVEAUX biens correspondants sortent.
+export async function clientsPass() {
+  const clients = (await listClients()).filter((c) => c.active);
+  if (!clients.length) return;
+  const rows = await getAllRows();
+  const now = Date.now();
+  const escH = (x = '') => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const claimed = await claimedByClient();
+  let sent = 0;
+  for (const c of clients) {
+    const matches = searchStock(c, rows, now);
+    const seen = claimed.get(c.name) || new Set();
+
+    if (!c.seeded_at) {
+      if (env.debug) { console.log(`  [client] recap ${c.name} : ${matches.length} bien(s)`); continue; }
+      try {
+        await claimMany(c.name, matches.map((m) => m.l.url).filter((u) => !seen.has(u)));
+        await sendDigest(telegramList(c, matches, env.clientsPageUrl, 'new'));
+        await markSeeded(c.name);
+        sent++; await sleep(400);
+      } catch (e) { console.warn(`  recap client ${c.name} KO: ${e.message}`); }
+      continue;
+    }
+
+    // nouveaux biens : on ignore ceux deja signales, et le doublon d'un bien
+    // deja signale chez une autre agence (meme bien, autre vitrine)
+    const fresh = [];
+    for (const g of groupSameProperty(matches)) {
+      const urls = g.items.map((i) => i.l.url);
+      const newUrls = urls.filter((u) => !seen.has(u));
+      if (!newUrls.length) continue;
+      if (newUrls.length < urls.length) {                // meme bien deja envoye
+        if (!env.debug) { try { await claimMany(c.name, newUrls); } catch { /* ignore */ } }
+        continue;
+      }
+      fresh.push(g);
+    }
+    if (!fresh.length) continue;
+    if (env.debug) { console.log(`  [client] ${c.name}: ${fresh.length} nouveau(x) bien(s)`); sent++; continue; }
+    try {
+      await claimMany(c.name, fresh.flatMap((g) => g.items.map((i) => i.l.url)));
+    } catch (e) { console.warn(`  matchs ${c.name} non enregistres: ${e.message}`); continue; }
+    const head = `🤝 <b>${fresh.length > 1 ? fresh.length + ' nouveaux biens' : 'Nouveau bien'} pour ${escH(c.name)}</b>\n`;
+    let body = '';
+    for (const g of fresh) {
+      const line = matchLine(g.lead, g.items.slice(1)) + '\n';
+      if (head.length + body.length + line.length > 3800) { body += '…\n'; break; }
+      body += line;
+    }
+    try {
+      await sendDigest(head + body.trimEnd());
+      sent++; await sleep(400);
+    } catch (e) { console.warn(`  notif match KO: ${e.message}`); }
+  }
+  if (sent) console.log(`  [clients] ${sent} message(s) envoye(s)`);
+}
+
 export async function runOnce() {
   const ts = new Date().toLocaleString('fr-FR');
   const emailOn = env.emailEnabled ? ' + e-mail' : '';
@@ -238,30 +325,14 @@ export async function runOnce() {
     console.error(`  [geo] erreur : ${e.message}`);
   }
 
-  // ----- matching acheteurs : biens actifs vs clients actifs -----
   try {
-    const clients = (await listClients()).filter((c) => c.active);
-    if (clients.length) {
-      const rows = await getAllRows();
-      const now = Date.now();
-      const active = rows.filter((r) => !r.last_seen || (now - new Date(r.last_seen)) / 86400000 <= env.activeDays);
-      let sent = 0;
-      for (const c of clients) {
-        for (const l of active) {
-          const m = matchListing(c, l);
-          if (!m) continue;
-          let fresh;
-          try { fresh = await claimMatch(c.name, l.url); } catch { continue; }
-          if (!fresh) continue;
-          if (env.debug) { console.log(`  [client] match ${c.name}: ${l.url}`); sent++; continue; }
-          try {
-            await sendDigest(`🤝 <b>Match pour ${c.name}</b>\n${matchLine(m)}`);
-            sent++; await sleep(400);
-          } catch (e) { console.warn(`  notif match KO: ${e.message}`); }
-        }
-      }
-      if (sent) console.log(`  [clients] ${sent} match(s) notifie(s)`);
-    }
+    await descEnrich();
+  } catch (e) {
+    console.error(`  [desc] erreur : ${e.message}`);
+  }
+
+  try {
+    await clientsPass();
   } catch (e) {
     console.error(`  [clients] erreur : ${e.message}`);
   }

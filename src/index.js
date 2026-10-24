@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { runOnce, runDigest, runGeoProbe } from './core/run.js';
 import { runReperage } from './core/reperage.js';
 import { env } from './config.js';
+import { syncTelegramKv, setupTelegramMenu } from './core/clients.js';
 
 function checkEnv() {
   const need = ['telegramToken', 'telegramChat', 'supabaseUrl', 'supabaseKey'];
@@ -14,6 +15,10 @@ function checkEnv() {
 
 async function main() {
   checkEnv();
+  // envoi immediat depuis la page clients : Supabase doit connaitre le bot
+  try { await syncTelegramKv(); } catch (e) { console.warn('syncTelegramKv:', e.message); }
+  // bouton "➕ Client" dans Telegram (formulaire)
+  try { await setupTelegramMenu(); } catch (e) { console.warn('setupTelegramMenu:', e.message); }
 
   if (env.mode === 'digest') {
     await runDigest();

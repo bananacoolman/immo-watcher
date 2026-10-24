@@ -35,11 +35,13 @@ export const env = {
   multiMandatEnabled: process.env.MULTI_MANDAT !== '0',
   multiPriceTol: parseFloat(process.env.MULTI_PRICE_TOL || '0.005'), // 0,5 %
   activeDays: parseInt(process.env.ACTIVE_DAYS || '4', 10),          // "encore en ligne" si revu < N j
+  clientsPageUrl: process.env.CLIENTS_PAGE_URL || 'https://bananacoolman.github.io/immo-watcher/clients.html',
   // Ecart au prix marche (#3)
   marketFlagPct: parseFloat(process.env.MARKET_FLAG_PCT || '0.15'),  // +/- 15% = sur/sous-evalue
   // Geolocalisation (#geo)
   geoEnrich: process.env.GEO_ENRICH !== '0',
   geoBudget: parseInt(process.env.GEO_BUDGET || '40', 10),           // pages detail lues par run
+  descBudget: parseInt(process.env.DESC_BUDGET || '60', 10),         // descriptions lues par run (stock existant)
   geoDelayMs: parseInt(process.env.GEO_DELAY_MS || '600', 10),       // politesse entre 2 fetch
   // Bridge e-mail (Leboncoin / Seloger via alertes)
   emailEnabled: process.env.EMAIL_ENABLED === '1',

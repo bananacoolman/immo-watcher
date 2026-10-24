@@ -3,11 +3,11 @@
 
 import { env, TARGET_COMMUNES } from '../config.js';
 import { supabaseClient } from './store.js';
+// Logique de correspondance PARTAGEE avec la page web docs/clients.html :
+// la page et le bot appliquent exactement les memes regles.
+import * as shared from '../../docs/clientmatch.js';
 
-const DAY = 86400000;
-const norm = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const esc = (s = '') => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const eur = (n) => n == null ? 'Prix nc' : n >= 1e6 ? (n / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: n % 1e6 ? 2 : 0 }) + ' M€' : Math.round(n / 1000) + ' k€';
+const norm = shared.norm;
 
 // ---------- parsing de la commande ----------
 // /client Dupont budget 1.5-2.5M communes Vence,Saint-Paul surface 200+ mots-cles piscine,vue mer
@@ -60,32 +60,59 @@ export function parseClientCommand(text) {
   return c;
 }
 
-// ---------- matching ----------
-export function matchListing(client, l) {
-  if (l.price_num == null && (client.budget_min || client.budget_max)) return null; // prix requis si budget
-  if (client.budget_min && l.price_num < client.budget_min) return null;
-  if (client.budget_max && l.price_num > client.budget_max) return null;
-  if (client.communes && client.communes.length && !client.communes.includes(l.commune)) return null;
+// ---------- formulaire dans Telegram ----------
+// Adresse du formulaire "nouveau client" (s'ouvre dans Telegram).
+export const newClientUrl = () => env.clientsPageUrl + (env.clientsPageUrl.includes('?') ? '&' : '?') + 'new=1';
+const isPrivateChat = () => Number(env.telegramChat) > 0;
 
-  const notes = [];
-  if (client.surface_min) {
-    if (l.surface == null) notes.push('surface à vérifier');
-    else if (l.surface < client.surface_min) return null;
-  }
-  if (client.keywords && client.keywords.length) {
-    const hay = norm(l.title || '');
-    const found = client.keywords.filter((k) => hay.includes(norm(k)));
-    if (!found.length) return null;               // au moins UN mot-clef present
-    if (found.length < client.keywords.length) {
-      notes.push('mots-clés partiels : ' + found.join(', '));
-    }
-  }
-  return { l, notes };
+// Bouton a utiliser sous un message : dans une conversation privee, le
+// formulaire s'ouvre DANS Telegram (connexion automatique) ; dans un groupe,
+// Telegram ne le permet pas -> lien classique (page web + code).
+export function formButton(text = '📝 Nouveau client', url = newClientUrl()) {
+  return isPrivateChat() ? { text, web_app: { url } } : { text, url };
 }
+
+// Bouton permanent a cote de la zone de saisie + liste des commandes.
+// Fait une seule fois (memorise dans immo_kv), refait si l'adresse change.
+export async function setupTelegramMenu() {
+  if (env.debug || !env.telegramToken || !env.telegramChat) return;
+  const sig = 'v1|' + newClientUrl();
+  const { data } = await supabaseClient().from('immo_kv').select('value').eq('key', 'telegram_menu').maybeSingle();
+  if (data && data.value === sig) return;
+  const call = async (method, body) => {
+    const r = await fetch(`https://api.telegram.org/bot${env.telegramToken}/${method}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) throw new Error(`${method}: ${j.description || r.status}`);
+  };
+  await call('setMyCommands', { commands: [
+    { command: 'nouveau', description: 'Nouveau client (formulaire)' },
+    { command: 'clients', description: 'Mes clients et leurs biens' },
+    { command: 'reperage', description: 'Fiche repérage d\'une annonce' },
+    { command: 'rapport', description: 'Rapport vendeur PDF' },
+  ] });
+  if (isPrivateChat()) {
+    await call('setChatMenuButton', { chat_id: env.telegramChat,
+      menu_button: { type: 'web_app', text: '➕ Client', web_app: { url: newClientUrl() } } });
+  }
+  await supabaseClient().from('immo_kv').upsert({ key: 'telegram_menu', value: sig }, { onConflict: 'key' });
+  console.log('  [clients] bouton Telegram "➕ Client" installe');
+}
+
+// ---------- matching (module partage) ----------
+export const matchListing = shared.matchListing;
 
 // ---------- persistence ----------
 export async function saveClient(c) {
-  const { error } = await supabaseClient().from('immo_clients').upsert({ ...c, active: true });
+  const { error } = await supabaseClient().from('immo_clients')
+    .upsert({ ...c, active: true, seeded_at: new Date().toISOString() });
+  if (error) throw error;
+}
+// recap initial envoye pour ce client
+export async function markSeeded(name) {
+  const { error } = await supabaseClient().from('immo_clients')
+    .update({ seeded_at: new Date().toISOString() }).eq('name', name);
   if (error) throw error;
 }
 export async function listClients() {
@@ -109,35 +136,57 @@ export async function claimMatch(clientName, url) {
   return true;
 }
 
+// Historique des biens deja signales, charge en une fois : Map(nom -> Set(url))
+export async function claimedByClient() {
+  const out = new Map();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseClient().from('immo_client_matches')
+      .select('client_name, url').range(from, from + pageSize - 1);
+    if (error) throw error;
+    for (const r of data) {
+      if (!out.has(r.client_name)) out.set(r.client_name, new Set());
+      out.get(r.client_name).add(r.url);
+    }
+    if (data.length < pageSize) break;
+  }
+  return out;
+}
+// Marque plusieurs biens comme signales en une requete (doublons ignores)
+export async function claimMany(clientName, urls) {
+  if (!urls.length) return;
+  const { error } = await supabaseClient().from('immo_client_matches')
+    .upsert(urls.map((url) => ({ client_name: clientName, url })),
+      { onConflict: 'client_name,url', ignoreDuplicates: true });
+  if (error) throw error;
+}
+
 // ---------- rendu ----------
 export function criteriaLine(c) {
-  const parts = [];
-  if (c.budget_min || c.budget_max) parts.push(`💶 ${c.budget_min ? eur(c.budget_min) : '0'} → ${c.budget_max ? eur(c.budget_max) : '∞'}`);
-  if (c.communes && c.communes.length) parts.push(`📍 ${c.communes.join(', ')}`);
-  if (c.surface_min) parts.push(`📐 ≥ ${c.surface_min} m²`);
-  if (c.keywords && c.keywords.length) parts.push(`🔎 ${c.keywords.join(', ')}`);
-  return parts.join(' · ') || 'aucun critère';
+  return shared.criteriaParts(c).join(' · ') || 'aucun critère';
 }
 
-export function matchLine({ l, notes }) {
-  const bits = [
-    `• <a href="${esc(l.url)}">${esc(l.commune)}</a> — <b>${eur(l.price_num)}</b>`,
-    l.surface ? `${l.surface} m²` : null,
-    l.secteur ? esc(l.secteur) : null,
-    `<i>${esc(l.site)}</i>`,
-    notes.length ? `⚠️ ${esc(notes.join(' · '))}` : null,
-  ].filter(Boolean);
-  return bits.join(' · ');
+// une ligne par bien (meme rendu que la page clients)
+export function matchLine(m, others = []) {
+  return shared.telegramLine(m, others);
+}
+export const telegramList = shared.telegramList;
+export const groupSameProperty = shared.groupSameProperty;
+
+// La page clients fait envoyer la liste sur Telegram par Supabase des
+// l'enregistrement. Pour cela Supabase a besoin du jeton du bot : le bot l'y
+// depose (table immo_kv verrouillee, illisible depuis la page) a chaque passage.
+// Ainsi le jeton reste uniquement dans les secrets GitHub et dans Supabase.
+export async function syncTelegramKv() {
+  if (env.debug || !env.telegramToken || !env.telegramChat) return;
+  const { error } = await supabaseClient().from('immo_kv').upsert([
+    { key: 'telegram_token', value: String(env.telegramToken) },
+    { key: 'telegram_chat', value: String(env.telegramChat) },
+  ], { onConflict: 'key' });
+  if (error) console.warn(`  [clients] config Telegram non deposee (migration 7 faite ?) : ${error.message}`);
 }
 
-// recherche dans le stock actif
+// recherche dans le stock en vente (memes regles que la page)
 export function searchStock(client, rows, nowMs = Date.now()) {
-  const active = rows.filter((r) => !r.last_seen || (nowMs - new Date(r.last_seen)) / DAY <= env.activeDays);
-  const out = [];
-  for (const l of active) {
-    const m = matchListing(client, l);
-    if (m) out.push(m);
-  }
-  out.sort((a, b) => (a.l.price_num || 0) - (b.l.price_num || 0));
-  return out;
+  return shared.searchStock(client, rows, nowMs, env.activeDays);
 }

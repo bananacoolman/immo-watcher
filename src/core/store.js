@@ -60,7 +60,7 @@ export async function getAllRows() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseClient()
       .from('immo_seen')
-      .select('site, listing_id, url, title, commune, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale, lat, lng, secteur, geo_source, geo_at, surface')
+      .select('site, listing_id, url, title, commune, price, price_num, initial_price, price_history, first_seen, last_seen, alerted_stale, lat, lng, secteur, geo_source, geo_at, surface, description')
       .range(from, from + pageSize - 1);
     if (error) throw error;
     out.push(...data);
@@ -89,5 +89,24 @@ export async function saveGeo(site, listingId, geo = {}) {
     .update({ ...geo, geo_at: new Date().toISOString() })
     .eq('site', site)
     .eq('listing_id', listingId);
+  if (error) throw error;
+}
+
+// Description de l'annonce (sans toucher a geo_at). '' = lue, rien d'utile.
+export async function saveDescription(site, listingId, description) {
+  const { error } = await supabaseClient()
+    .from('immo_seen')
+    .update({ description: description || '' })
+    .eq('site', site)
+    .eq('listing_id', listingId);
+  if (error) throw error;
+}
+// Neutralise un texte generique d'agence repete sur plusieurs annonces.
+export async function blankDescription(site, description) {
+  const { error } = await supabaseClient()
+    .from('immo_seen')
+    .update({ description: '' })
+    .eq('site', site)
+    .eq('description', description);
   if (error) throw error;
 }
