@@ -22,7 +22,7 @@ const ICON = { new: '🏠', drop: '🔻', stale: '⏳', reappear: '♻️' };
 const seededNow = new Map();
 
 // Logique partagee : memoire temporelle -> signaux -> notif -> enregistrement.
-async function emit(source, listings) {
+export async function emit(source, listings) {
   if (!listings.length) return 0;
 
   const byId = new Map();
@@ -30,7 +30,13 @@ async function emit(source, listings) {
   const unique = [...byId.values()];
 
   const records = await getRecords(source);
-  const seeding = env.seedOnly || records.size === 0;
+  // Agence jamais lue -> enregistrement silencieux. Idem si AUCUNE annonce lue
+  // n'est connue alors que l'agence a deja un historique : le site a change le
+  // format de ses adresses (ou on a corrige sa lecture) -> pas d'avalanche.
+  const overlap = unique.some((l) => records.has(l.id));
+  const reformatted = records.size > 0 && unique.length >= 3 && !overlap;
+  if (reformatted) console.log(`  [${source}] adresses changees : ${unique.length} annonces re-enregistrees sans notification.`);
+  const seeding = env.seedOnly || records.size === 0 || reformatted;
   const nowIso = new Date().toISOString();
 
   const rows = [];
@@ -45,7 +51,7 @@ async function emit(source, listings) {
 
   if (seeding) {
     console.log(`  [${source}] seed : ${rows.length} annonces enregistrees (pas de notif).`);
-    if (!env.seedOnly && rows.length) seededNow.set(source, rows.length);
+    if (!env.seedOnly && !reformatted && rows.length) seededNow.set(source, rows.length);
     return 0;
   }
 
@@ -216,7 +222,7 @@ export async function runSitesProbe() {
   console.log(`=== SONDE AGENCES — ${list.length} agence(s), aucune ecriture ===`);
   const summary = [];
   for (const site of list) {
-    const stats = { pages: [], failed: [], raw: [], otherCommune: [] };
+    const stats = { pages: [], failed: [], raw: [], otherCommune: [], dropped: [] };
     let listings = [];
     const t0 = Date.now();
     try { listings = await genericScrape(site, stats); }
@@ -231,6 +237,10 @@ export async function runSitesProbe() {
     console.log(`  liens d'annonces trouves : ${stats.raw.length} · gardes (nos communes) : ${listings.length} · hors secteur : ${stats.otherCommune.length}`);
     listings.slice(0, 4).forEach((l) => console.log(`    • ${l.commune} | ${l.price || 'prix ?'} | ${(l.title || '').slice(0, 50)} | ${l.url}`));
     if (!listings.length) stats.raw.slice(0, 4).forEach((u) => console.log('    ? ' + u));
+    if (stats.dropped.length) {
+      console.log(`  ecartes (prix < mini ou location) : ${stats.dropped.length}`);
+      stats.dropped.slice(0, 3).forEach((d) => console.log('    - ' + d.slice(0, 220)));
+    }
     await sleep(env.politeDelayMs);
   }
   console.log('\n=== RESUME ===');

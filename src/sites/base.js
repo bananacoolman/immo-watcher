@@ -139,9 +139,14 @@ function fromAnchors($, baseUrl, detailPattern) {
         .replace(/\s+/g, ' ').trim().slice(0, 140);
     // titre charabia (hash d'image, attribution...) -> on derive du slug de l'URL
     if (!title || /\b[0-9a-f]{12,}\b/i.test(title) || /\boriginal\b.*attribut/i.test(title)) {
-      const slug = (url.split('/').filter(Boolean).pop() || '')
+      const slug = (url.split('?')[0].split('/').filter(Boolean).pop() || '')
         .replace(/-\d+$/, '').replace(/[-_]+/g, ' ').trim();
       if (slug) title = (slug.charAt(0).toUpperCase() + slug.slice(1)).slice(0, 140);
+    }
+    // titre = simple numero (Century 21, ERA...) ou "Voir la fiche" -> debut du texte de la carte
+    if (!title || /^\d+$/.test(title) || /^(voir|see|view|en savoir|d[ée]couvrir|details?)\b/i.test(title)) {
+      const t = text.replace(/\s+/g, ' ').trim().slice(0, 110);
+      if (t) title = t;
     }
 
     const pv = priceFromCard($, $card);
@@ -186,6 +191,8 @@ export async function genericScrape(site, stats = null) {
     if (raws.length < 2) raws = fromAnchors($, indexUrl, pattern);
     // en detection automatique : une annonce affiche un prix
     if (auto) raws = raws.filter((r) => r.priceNum != null);
+    // meme annonce vue depuis plusieurs pages (?agency=...) -> une seule adresse
+    if (site.stripQuery) raws = raws.map((r) => ({ ...r, url: r.url.split('?')[0] }));
 
     let added = 0;
     for (const r of raws) { if (!collected.has(r.url)) added++; collected.set(r.url, r); }
@@ -214,12 +221,16 @@ export async function genericScrape(site, stats = null) {
     }
     const commune = matchCommune(communeSrc);
     if (!commune) { if (stats) stats.otherCommune.push(r.url); continue; }
-    if (looksLikeRental(blob)) continue; // on ne veut que les ventes
+    if (looksLikeRental(blob)) { if (stats) stats.dropped.push(`location : ${r.url}`); continue; } // ventes seulement
 
     // Prix : valeur numerique deja connue (JSON-LD) ou extraite du texte.
     const num = r.priceNum ?? priceValue(blob);
     if (num != null) {
-      if (env.minPrice && num < env.minPrice) { skippedPrice++; continue; }
+      if (env.minPrice && num < env.minPrice) {
+        skippedPrice++;
+        if (stats) stats.dropped.push(`prix ${num.toLocaleString('fr-FR')} € < mini : ${commune} ${r.url} « ${(r.text || '').slice(0, 90)} »`);
+        continue;
+      }
     } else if (!env.keepUnknownPrice) {
       continue; // prix inconnu et on a choisi de les exclure
     }

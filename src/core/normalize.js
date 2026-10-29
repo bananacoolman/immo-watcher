@@ -56,10 +56,15 @@ export function extractPrice(text = '') {
 // de la carte : c'est le prix de vente (evite le prix/m² et les honoraires).
 export function priceValue(text = '') {
   let max = null;
-  for (const m of text.matchAll(/(\d[\d\s.\u00a0\u202f]{3,})\s*(?:€|EUR)/gi)) {
-    const digits = m[1].replace(/[^\d]/g, '');
+  const take = (raw) => {
+    const s = raw.trim().replace(/[.,]\d{1,2}$/, '');        // "1 250 000,00" -> sans centimes
+    const digits = s.replace(/[^\d]/g, '');
     if (digits.length >= 4) { const n = Number(digits); if (max == null || n > max) max = n; }
-  }
+  };
+  // "1 250 000 €", "1.250.000€", "1,250,000 EUR"
+  for (const m of text.matchAll(/(\d[\d\s.,\u00a0\u202f]{3,})\s*(?:€|EUR)/gi)) take(m[1]);
+  // "€ 1,250,000" (sites en anglais)
+  for (const m of text.matchAll(/(?:€|EUR)\s*(\d[\d\s.,\u00a0\u202f]{3,}\d)/gi)) take(m[1]);
   return max;
 }
 
