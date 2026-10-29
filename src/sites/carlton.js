@@ -7,5 +7,7 @@ export default {
   enabled: true,
   indexUrls: [BASE, BASE + 'vence/'],
   followPages: 4,
-  detailPattern: /carlton-international\.com\/(?:en\/)?annonce\//i,
+  detailPattern: /^https?:\/\/(?:www\.)?carlton-international\.com\/(?:en\/)?annonce\/[^/?#]{12,}\/?$/i,
+  // les pages par commune melangent les secteurs : la commune doit etre dans l'adresse
+  communeFrom: 'url',
 };

@@ -5,5 +5,5 @@ export default {
   enabled: true,
   indexUrls: ['https://laclerouge.fr/fr/properties/', 'https://laclerouge.fr/fr/'],
   followPages: 5,
-  detailPattern: /laclerouge\.fr\/(?:fr\/|en\/)?property\//i,
+  detailPattern: /^https?:\/\/(?:www\.)?laclerouge\.fr\/(?:fr\/|en\/)?property\/[^/?#]+\/?$/i,
 };

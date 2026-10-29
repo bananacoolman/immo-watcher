@@ -3,7 +3,7 @@ export default {
   name: 'MG Palm Properties',
   domain: 'mg-palmproperties.com',
   enabled: true,
-  indexUrls: ['https://mg-palmproperties.com/', 'https://mg-palmproperties.com/en/'],
+  indexUrls: ['https://mg-palmproperties.com/'],
   followPages: 5,
-  detailPattern: /mg-palmproperties\.com\/(?:en\/)?propriete\//i,
+  detailPattern: /^https?:\/\/(?:www\.)?mg-palmproperties\.com\/propriete\/[^/?#]+\/?$/i,   // version francaise seulement
 };

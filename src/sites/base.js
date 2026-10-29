@@ -85,6 +85,8 @@ function fromJsonLd($, baseUrl) {
   return out;
 }
 
+const SHARE = /(facebook\.com|twitter\.com|\/\/x\.com|pinterest\.|linkedin\.com|whatsapp|wa\.me|mailto:|sharer|\/share\?|passthru|wp-content\/|addtoany)/i;
+
 // Remonte jusqu'au plus grand ancetre ne contenant qu'UNE seule annonce
 // (on s'arrete des qu'un parent englobe un 2e lien de detail). Robuste a
 // l'imbrication et garantit qu'on lit le prix de la bonne annonce.
@@ -127,6 +129,7 @@ function fromAnchors($, baseUrl, detailPattern) {
     const href = $(a).attr('href') || '';
     const url = abs(href, baseUrl);              // resout les liens relatifs en absolu
     if (!url || !detailPattern.test(url)) return; // puis teste le motif sur l'URL absolue
+    if (SHARE.test(url)) return;                  // boutons de partage (Facebook, Pinterest...)
     if (seen.has(url)) return;
     seen.add(url);
 
@@ -144,9 +147,18 @@ function fromAnchors($, baseUrl, detailPattern) {
       if (slug) title = (slug.charAt(0).toUpperCase() + slug.slice(1)).slice(0, 140);
     }
     // titre = simple numero (Century 21, ERA...) ou "Voir la fiche" -> debut du texte de la carte
-    if (!title || /^\d+$/.test(title) || /^(voir|see|view|en savoir|d[ée]couvrir|details?)\b/i.test(title)) {
-      const t = text.replace(/\s+/g, ' ').trim().slice(0, 110);
-      if (t) title = t;
+    if (/\b\d{3,4}x\d{3,4}\b|^logo$|^image$|^photo/i.test(title)) {        // nom d'image -> titre tire de l'adresse
+      const slug = decodeURIComponent(url.split('?')[0].split('/').filter(Boolean).pop() || '')
+        .replace(/[+_-]+/g, ' ').replace(/\s\d{5,}$/, '').trim();
+      title = slug ? (slug.charAt(0).toUpperCase() + slug.slice(1)).slice(0, 140) : '';
+    }
+    if (!title || /^\d+$/.test(title) || /^(voir|see|view|en savoir|d[ée]couvrir|discover|details?|more)\b/i.test(title)) {
+      // l'adresse de la fiche si elle est parlante, sinon le debut du texte de la carte
+      const slug = decodeURIComponent(url.split('?')[0].split('/').filter(Boolean).pop() || '')
+        .replace(/\.html?$/, '').replace(/[+_-]+/g, ' ').trim();
+      const t = /[a-z]{4,}.*[a-z]{4,}/i.test(slug) ? slug.charAt(0).toUpperCase() + slug.slice(1)
+        : text.replace(/\s+/g, ' ').trim();
+      if (t) title = t.slice(0, 110);
     }
 
     const pv = priceFromCard($, $card);
@@ -191,6 +203,15 @@ export async function genericScrape(site, stats = null) {
     if (raws.length < 2) raws = fromAnchors($, indexUrl, pattern);
     // en detection automatique : une annonce affiche un prix
     if (auto) raws = raws.filter((r) => r.priceNum != null);
+    if (stats && !raws.length && stats.samples.length < 12) {
+      const seenS = new Set();
+      $('a[href]').each((_, a) => {
+        const u = abs($(a).attr('href') || '', indexUrl);
+        if (!u || seenS.has(u) || seenS.size >= 10 || SHARE.test(u)) return;
+        seenS.add(u);
+      });
+      stats.samples.push(`${indexUrl} -> ${$('a[href]').length} liens, ex. : ${[...seenS].slice(2, 10).join('  ')}`);
+    }
     // meme annonce vue depuis plusieurs pages (?agency=...) -> une seule adresse
     if (site.stripQuery) raws = raws.map((r) => ({ ...r, url: r.url.split('?')[0] }));
 
@@ -219,7 +240,12 @@ export async function genericScrape(site, stats = null) {
       const m = communeSrc.match(site.communeRegex);
       if (m) communeSrc = m[1];
     }
-    const commune = matchCommune(communeSrc);
+    // communeFrom 'url' : seule l'adresse de la fiche fait foi (pages qui
+    // melangent les secteurs) ; 'url-first' : l'adresse d'abord, sinon le texte.
+    const fromUrl = matchCommune(decodeURIComponent(r.url.split('?')[0]).replace(/^https?:\/\/[^/]+/, ''));
+    const commune = site.communeFrom === 'url' ? fromUrl
+      : site.communeFrom === 'url-first' ? (fromUrl || matchCommune(communeSrc))
+      : matchCommune(communeSrc);
     if (!commune) { if (stats) stats.otherCommune.push(r.url); continue; }
     if (looksLikeRental(blob)) { if (stats) stats.dropped.push(`location : ${r.url}`); continue; } // ventes seulement
 

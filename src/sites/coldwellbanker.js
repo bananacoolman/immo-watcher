@@ -6,9 +6,10 @@ export default {
   name: 'Coldwell Banker',
   enabled: true,
   preferJsonLd: false,
+  needsJs: true,             // liste affichee en JavaScript
   indexUrls: VILLES.map((v) => `https://www.coldwellbanker.fr/vente+immobilier+${v}+com06.html`),
   followPages: 3,
-  detailPattern: /coldwellbanker\.fr\/(?:en\/)?[a-z0-9+-]+\+(?:vente|sale)\+r\d+\.html/i,
+  detailPattern: /coldwellbanker\.fr\/.*\+r\d+\.html/i,
   // commune = debut de l'adresse de la fiche : "saint-paul+06+villa+vente+r..."
   communeRegex: /coldwellbanker\.fr\/(?:en\/)?([a-z-]+)\+06\+/i,
 };

@@ -222,7 +222,7 @@ export async function runSitesProbe() {
   console.log(`=== SONDE AGENCES — ${list.length} agence(s), aucune ecriture ===`);
   const summary = [];
   for (const site of list) {
-    const stats = { pages: [], failed: [], raw: [], otherCommune: [], dropped: [] };
+    const stats = { pages: [], failed: [], raw: [], otherCommune: [], dropped: [], samples: [] };
     let listings = [];
     const t0 = Date.now();
     try { listings = await genericScrape(site, stats); }
@@ -237,6 +237,10 @@ export async function runSitesProbe() {
     console.log(`  liens d'annonces trouves : ${stats.raw.length} · gardes (nos communes) : ${listings.length} · hors secteur : ${stats.otherCommune.length}`);
     listings.slice(0, 4).forEach((l) => console.log(`    • ${l.commune} | ${l.price || 'prix ?'} | ${(l.title || '').slice(0, 50)} | ${l.url}`));
     if (!listings.length) stats.raw.slice(0, 4).forEach((u) => console.log('    ? ' + u));
+    if (!stats.raw.length && stats.samples.length) {
+      console.log('  aucun lien d\'annonce reconnu ; liens presents sur la page :');
+      stats.samples.slice(0, 2).forEach((x) => console.log('    > ' + x.slice(0, 900)));
+    }
     if (stats.dropped.length) {
       console.log(`  ecartes (prix < mini ou location) : ${stats.dropped.length}`);
       stats.dropped.slice(0, 3).forEach((d) => console.log('    - ' + d.slice(0, 220)));

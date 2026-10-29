@@ -16,10 +16,7 @@ export default {
     `${area}?category=1&region=1&sector=28&page=5`,
     `${area}?category=1&region=1&sector=28&page=6`,
   ],
-  // les adresses des fiches ont change (oct. 2026) : reperage automatique
-  // (lien dont la carte affiche un prix), pages de recherche exclues
-  domain: 'michaelzingraf.com',
-  detailPattern: 'auto',
-  excludePattern: /\/(recherche|search|location|rental)\/|[?&](category|sector|orderBy|page)=|saint-paul-de-vence-et-environs\/?$/i,
+  // fiche (oct. 2026) : /fr/vente/MZISP1831-titre-du-bien
+  detailPattern: /michaelzingraf\.com\/fr\/vente\/[A-Z]{2,}\d+-/,
   communeRegex: /Vente\s+[A-Za-zÀ-ÿ]+\s+([A-Za-zÀ-ÿ'’\- ]+?)\s*\d/,
 };

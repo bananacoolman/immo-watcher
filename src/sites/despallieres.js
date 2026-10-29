@@ -8,5 +8,6 @@ export default {
     'https://www.despallieres-immobilier.com/vente-immobilier/category/maison/',
   ],
   followPages: 4,
+  communeFrom: 'url-first',   // la commune figure dans l'adresse de la fiche
   detailPattern: /despallieres-immobilier\.com\/vente-immobilier\/(?!category\/)[^/?#]+\/?$/i,
 };
