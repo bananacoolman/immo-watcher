@@ -1,11 +1,11 @@
 // Engel & Völkers — engelvoelkers.com (rendu JavaScript -> needsJs)
-// Refs type W-02DGJQ (dans l'URL de detail).
+// Fiche (oct. 2026) : /fr/fr/exposes/<identifiant>
 const base = 'https://www.engelvoelkers.com/fr/fr/propriete/res/vendre/maison/luxe/provence-alpes-cote-dazur';
 export default {
   name: 'Engel & Völkers',
-  enabled: false,            // SPA recalcitrante : a reprendre via leur API interne
+  enabled: true,             // reactive oct. 2026 (nouveau format des fiches)
   needsJs: true,             // SPA : necessite Playwright
-  preferJsonLd: true,
+  preferJsonLd: false,
   indexUrls: [
     `${base}/saint-paul-de-vence`,
     `${base}/vence`,
@@ -13,5 +13,5 @@ export default {
     `${base}/tourrettes-sur-loup`,
     `${base}/la-gaude`,
   ],
-  detailPattern: /\bW-[0-9A-Z]{6}\b/i,
+  detailPattern: /engelvoelkers\.com\/fr\/fr\/exposes\/[0-9a-f-]{36}/i,
 };

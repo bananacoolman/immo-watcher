@@ -1,20 +1,23 @@
 // Coldwell Banker — coldwellbanker.fr
-// On lit les annonces des agences Coldwell du secteur (Art Realty a Saint-Paul,
-// Standing Realty) + les pages commune. Fiche : /saint-paul+06+villa+vente+r28480565.html
+// Fiche (oct. 2026) : /vente-immobilier/maison/france/provence-alpes-cote-d-azur/
+//                     alpes-maritimes/antibes-06160/maison-antibes-441-m-9-pieces-601
+// Listes : region PACA (plus recents d'abord) + agences du secteur.
 const AGENCES = [
   'coldwell-banker-art-realty+id33728',
   'coldwell-banker-standing-realty+id33342',
 ];
+const REGION = 'https://www.coldwellbanker.fr/vente-immobilier/biens-immobiliers/france/provence-alpes-cote-d-azur';
 export default {
   name: 'Coldwell Banker',
   enabled: true,
   preferJsonLd: false,
   indexUrls: [
+    `${REGION}/alpes-maritimes?sort=sort_by_published_at+desc`,
+    `${REGION}?sort=sort_by_published_at+desc`,
     ...AGENCES.map((a) => `https://www.coldwellbanker.fr/agences-immobilieres/${a}/vente+immobilier+provence-alpes-cote-d-azur+reg93.html`),
-    'https://www.coldwellbanker.fr/vente+immobilier+saint-paul+com06.html',
-    'https://www.coldwellbanker.fr/vente+immobilier+vence+com06.html',
   ],
   followPages: 4,
-  detailPattern: /coldwellbanker\.fr\/.*\+r\d+\.html/i,
-  communeRegex: /coldwellbanker\.fr\/(?:en\/)?([a-z-]+)\+06\+/i,
+  detailPattern: /coldwellbanker\.fr\/(?:en\/)?(?:vente-immobilier|sales)\/[a-z-]+\/france\/provence-alpes-cote-d-azur\/(?:alpes-maritimes\/)?[a-z-]+-\d{5}\/[a-z0-9-]+-\d+\/?$|coldwellbanker\.fr\/[a-z0-9+-]+\+r\d+\.html$/i,   // + ancien format
+  // commune = segment "<commune>-<code postal>" de l'adresse
+  communeRegex: /\/([a-z-]+)-\d{5}\//i,
 };
