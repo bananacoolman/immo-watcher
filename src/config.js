@@ -23,7 +23,7 @@ export const env = {
   usePlaywright: process.env.USE_PLAYWRIGHT === '1',
   debug: process.env.DEBUG_SCRAPE === '1',
   seedOnly: process.env.SEED_ONLY === '1',
-  minPrice: parseInt(process.env.MIN_PRICE || '300000', 10),
+  minPrice: parseInt(process.env.MIN_PRICE || '600000', 10),
   keepUnknownPrice: process.env.KEEP_UNKNOWN_PRICE !== '0',
   // Signaux "mandats qui trainent"
   signalsEnabled: process.env.SIGNALS_ENABLED !== '0',   // actif par defaut

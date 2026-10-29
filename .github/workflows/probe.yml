@@ -32,4 +32,4 @@ jobs:
         env:
           MODE: sites-probe
           SITES: ${{ github.event.inputs.sites }}
-          MIN_PRICE: '300000'
+          MIN_PRICE: '600000'
