@@ -10,6 +10,50 @@ function abs(href, base) {
   try { return new URL(href, base).href; } catch { return null; }
 }
 
+// --- Detection automatique des fiches (sites sans motif d'URL connu) ---
+// Un lien est candidat s'il reste sur le site et n'est pas une page de
+// service (contact, estimation, blog...). On ne garde ensuite que ceux dont
+// la "carte" affiche un prix : c'est ce qui distingue une annonce d'un menu.
+const NAV_WORDS = /(contact|estimation|estimer|vendre-mon|honoraire|mention|legal|cookie|confidential|privacy|recrut|emploi|blog|actualit|news|equipe|team|about|a-propos|qui-sommes|notre-agence|agence\/\d+$|partenaire|plan[+-]site|sitemap|favori|alerte|login|connexion|compte|account|newsletter|location|louer|rent|\.pdf$|\.jpe?g$|\.png$|tel:|mailto:|whatsapp|facebook|instagram|linkedin|youtube|twitter)/i;
+export function autoDetail(site) {
+  const host = (h) => h.replace(/^www\./, '');
+  const index = new Set(site.indexUrls.map((u) => u.split('#')[0].replace(/\/$/, '')));
+  return {
+    test(u) {
+      let url;
+      try { url = new URL(u); } catch { return false; }
+      if (host(url.hostname) !== host(site.domain)) return false;
+      const path = url.pathname.replace(/\/$/, '');
+      if (!path || path === '/fr' || path === '/en') return false;
+      if (index.has(u.split('#')[0].replace(/\/$/, ''))) return false;
+      if (site.excludePattern && site.excludePattern.test(u)) return false;
+      if (NAV_WORDS.test(u)) return false;
+      if (/[?&](page|p|pg)=\d+|\/page\/\d+/i.test(u)) return false;
+      return true;
+    },
+  };
+}
+
+// Pages suivantes d'une liste (?page=2, /page/2/, /vente/2...) : meme site,
+// meme chemin de base, seul le numero change.
+function nextPages($, baseUrl) {
+  const out = new Set();
+  let base;
+  try { base = new URL(baseUrl); } catch { return out; }
+  const stem = base.pathname.replace(/\/(page\/)?\d+\/?$/, '').replace(/\/$/, '');
+  $('a[href]').each((_, a) => {
+    const u = abs($(a).attr('href') || '', baseUrl);
+    if (!u) return;
+    let x; try { x = new URL(u); } catch { return; }
+    if (x.hostname !== base.hostname) return;
+    const qp = /[?&](page|p|pg)=(\d+)/i.test(x.search);
+    const xs = x.pathname.replace(/\/(page\/)?\d+\/?$/, '').replace(/\/$/, '');
+    const pathNum = /\/(page\/)?\d+\/?$/.test(x.pathname) && xs === stem;
+    if ((qp && x.pathname.replace(/\/$/, '') === base.pathname.replace(/\/$/, '')) || pathNum) out.add(u.split('#')[0]);
+  });
+  return out;
+}
+
 // --- Strategie 1 : donnees structurees JSON-LD (la plus fiable quand presente)
 function fromJsonLd($, baseUrl) {
   const out = [];
@@ -114,24 +158,47 @@ function fromAnchors($, baseUrl, detailPattern) {
 }
 
 // Scrape generique d'un site a partir de sa config.
-export async function genericScrape(site) {
+export async function genericScrape(site, stats = null) {
   const collected = new Map(); // url -> raw
+  const auto = !site.detailPattern || site.detailPattern === 'auto';
+  const pattern = auto ? autoDetail(site) : site.detailPattern;
+  const maxPages = site.followPages || 0;     // pages suivantes a suivre en plus
+  const queue = [...site.indexUrls];
+  const done = new Set();
+  let extra = 0;
 
-  for (const indexUrl of site.indexUrls) {
+  while (queue.length) {
+    const indexUrl = queue.shift();
+    if (done.has(indexUrl)) continue;
+    done.add(indexUrl);
     let html;
     try {
       html = await getHtml(indexUrl, { useJs: !!site.needsJs });
     } catch (e) {
       console.warn(`  [${site.name}] echec ${indexUrl}: ${e.message}`);
+      if (stats) stats.failed.push(`${indexUrl} (${e.message})`);
       continue;
     }
+    if (stats) stats.pages.push(indexUrl);
     const $ = cheerio.load(html);
 
     let raws = site.preferJsonLd !== false ? fromJsonLd($, indexUrl) : [];
-    if (raws.length < 2) raws = fromAnchors($, indexUrl, site.detailPattern);
+    if (raws.length < 2) raws = fromAnchors($, indexUrl, pattern);
+    // en detection automatique : une annonce affiche un prix
+    if (auto) raws = raws.filter((r) => r.priceNum != null);
 
-    for (const r of raws) collected.set(r.url, r);
+    let added = 0;
+    for (const r of raws) { if (!collected.has(r.url)) added++; collected.set(r.url, r); }
+
+    if (maxPages && added) {
+      for (const u of nextPages($, indexUrl)) {
+        if (extra >= maxPages || done.has(u) || queue.includes(u)) continue;
+        queue.push(u); extra++;
+      }
+    }
+    if (queue.length) await new Promise((r) => setTimeout(r, site.pageDelayMs ?? (maxPages ? 800 : 0)));
   }
+  if (stats) stats.raw = [...collected.keys()];
 
   // Normalisation + filtres (secteur, location, prix mini).
   const listings = [];
@@ -146,7 +213,7 @@ export async function genericScrape(site) {
       if (m) communeSrc = m[1];
     }
     const commune = matchCommune(communeSrc);
-    if (!commune) continue;
+    if (!commune) { if (stats) stats.otherCommune.push(r.url); continue; }
     if (looksLikeRental(blob)) continue; // on ne veut que les ventes
 
     // Prix : valeur numerique deja connue (JSON-LD) ou extraite du texte.

@@ -17,6 +17,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const ICON = { new: '🏠', drop: '🔻', stale: '⏳', reappear: '♻️' };
 
+// Agences lues pour la premiere fois pendant ce passage (stock enregistre
+// sans notification) : nom -> nombre d'annonces.
+const seededNow = new Map();
+
 // Logique partagee : memoire temporelle -> signaux -> notif -> enregistrement.
 async function emit(source, listings) {
   if (!listings.length) return 0;
@@ -41,6 +45,7 @@ async function emit(source, listings) {
 
   if (seeding) {
     console.log(`  [${source}] seed : ${rows.length} annonces enregistrees (pas de notif).`);
+    if (!env.seedOnly && rows.length) seededNow.set(source, rows.length);
     return 0;
   }
 
@@ -63,6 +68,21 @@ async function emit(source, listings) {
   return sent;
 }
 
+let silentMulti = 0;
+
+// Un seul message quand de nouvelles agences sont lues pour la 1re fois.
+async function newAgenciesSummary() {
+  if (!seededNow.size || env.debug) return;
+  const total = [...seededNow.values()].reduce((a, b) => a + b, 0);
+  const lines = [...seededNow.entries()].sort((a, b) => b[1] - a[1]).map(([n, k]) => `• ${n} : ${k}`);
+  const text = `🏢 <b>${seededNow.size} agence${seededNow.size > 1 ? 's' : ''} ajoutée${seededNow.size > 1 ? 's' : ''} à la veille</b> — ${total} annonces lues\n`
+    + lines.join('\n')
+    + (silentMulti ? `\n\n🎯 ${silentMulti} de ces biens étaient déjà proposés par d'autres agences (multi-mandat).` : '')
+    + '\n\nÀ partir de maintenant, leurs nouveautés et baisses de prix sont signalées comme pour les autres.';
+  try { await sendDigest(text); } catch (e) { console.warn(`  resume agences KO: ${e.message}`); }
+  seededNow.clear();
+}
+
 // Passe transverse : detecte les biens en multi-mandat (meme commune + prix
 // chez plusieurs agences) et notifie les grappes encore jamais signalees.
 async function multiMandatPass() {
@@ -70,6 +90,7 @@ async function multiMandatPass() {
   const rows = await getAllRows();
   const clusters = findMultiMandat(rows);
   let sent = 0;
+  silentMulti = 0;
   for (const c of clusters) {
     const key = clusterKey(c);
     if (env.debug) {
@@ -80,6 +101,9 @@ async function multiMandatPass() {
     let fresh;
     try { fresh = await claimAlert(key); } catch (e) { console.warn(`  multi-mandat dedupe KO: ${e.message}`); continue; }
     if (!fresh) continue;
+    // agence lue pour la 1re fois : ses doublons avec le stock existant ne
+    // sont pas des nouveautes -> enregistres sans notification (resume plus bas)
+    if (c.sites.some((s) => seededNow.has(s))) { silentMulti++; continue; }
     try { await notifyMulti(c); sent++; await sleep(400); }
     catch (e) { console.warn(`  notif multi KO: ${e.message}`); }
   }
@@ -181,6 +205,37 @@ async function descEnrich() {
     if (!env.debug) { try { await blankDescription(x.site, x.description); g++; } catch { /* ignore */ } }
   }
   if (todo.length || g) console.log(`  [desc] ${n}/${todo.length} descriptions lues${g ? ` · ${g} texte(s) generique(s) neutralise(s)` : ''} · reste ${Math.max(0, all.filter((r) => isActive(r, now) && r.description == null).length - todo.length)}`);
+}
+
+// Mode sonde agences (MODE=sites-probe) : lit chaque agence et affiche ce qui
+// est trouve, SANS rien enregistrer ni envoyer. Filtre : SITES="Burns,Orpi".
+export async function runSitesProbe() {
+  const { ALL_SITES } = await import('../sites/index.js');
+  const want = (process.env.SITES || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const list = ALL_SITES.filter((s) => !want.length || want.some((w) => s.name.toLowerCase().includes(w)));
+  console.log(`=== SONDE AGENCES — ${list.length} agence(s), aucune ecriture ===`);
+  const summary = [];
+  for (const site of list) {
+    const stats = { pages: [], failed: [], raw: [], otherCommune: [] };
+    let listings = [];
+    const t0 = Date.now();
+    try { listings = await genericScrape(site, stats); }
+    catch (e) { stats.failed.push('ERREUR ' + e.message); }
+    const sec = ((Date.now() - t0) / 1000).toFixed(0);
+    const withPrice = listings.filter((l) => l.priceNum != null).length;
+    const verdict = listings.length ? 'OK' : stats.raw.length ? 'HORS SECTEUR ?' : stats.pages.length ? 'AUCUNE FICHE' : 'SITE INACCESSIBLE';
+    summary.push(`${verdict.padEnd(17)} ${site.name.padEnd(26)} ${String(listings.length).padStart(3)} annonces (${withPrice} avec prix) · ${stats.raw.length} liens · ${stats.pages.length} page(s) lue(s) · ${sec}s`);
+    console.log(`\n--- ${site.name} ${site.enabled ? '' : '(desactivee)'} ---`);
+    console.log(`  pages lues : ${stats.pages.length}${stats.failed.length ? ` · echecs : ${stats.failed.length}` : ''}`);
+    stats.failed.slice(0, 4).forEach((f) => console.log('    x ' + f));
+    console.log(`  liens d'annonces trouves : ${stats.raw.length} · gardes (nos communes) : ${listings.length} · hors secteur : ${stats.otherCommune.length}`);
+    listings.slice(0, 4).forEach((l) => console.log(`    • ${l.commune} | ${l.price || 'prix ?'} | ${(l.title || '').slice(0, 50)} | ${l.url}`));
+    if (!listings.length) stats.raw.slice(0, 4).forEach((u) => console.log('    ? ' + u));
+    await sleep(env.politeDelayMs);
+  }
+  console.log('\n=== RESUME ===');
+  summary.forEach((l) => console.log(l));
+  if (env.usePlaywright || list.some((s) => s.needsJs)) await closeBrowser();
 }
 
 // Mode sonde (MODE=geo-probe) : mesure, agence par agence, le taux de reussite
@@ -317,6 +372,8 @@ export async function runOnce() {
   } catch (e) {
     console.error(`  [multi-mandat] erreur : ${e.message}`);
   }
+
+  await newAgenciesSummary();
 
   try {
     await geoEnrich();

@@ -1,0 +1,35 @@
+name: immo-sonde-agences
+
+# Test des agences : lit les sites et affiche ce qui est trouve,
+# sans rien enregistrer ni envoyer sur Telegram. A lancer a la main.
+on:
+  workflow_dispatch:
+    inputs:
+      sites:
+        description: "Agences a tester (ex. Burns,Orpi) — vide = toutes"
+        required: false
+        default: ''
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - name: Cache Playwright
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-v1
+      - if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
+      - run: node src/index.js
+        env:
+          MODE: sites-probe
+          SITES: ${{ github.event.inputs.sites }}
+          MIN_PRICE: '300000'
