@@ -204,13 +204,15 @@ export async function genericScrape(site, stats = null) {
     // en detection automatique : une annonce affiche un prix
     if (auto) raws = raws.filter((r) => r.priceNum != null);
     if (stats && !raws.length && stats.samples.length < 12) {
-      const seenS = new Set();
+      // liens qui ressemblent a des annonces (numero, "annonce", "propriete"...) en priorite
+      const all = new Set();
       $('a[href]').each((_, a) => {
         const u = abs($(a).attr('href') || '', indexUrl);
-        if (!u || seenS.has(u) || seenS.size >= 10 || SHARE.test(u)) return;
-        seenS.add(u);
+        if (u && !SHARE.test(u) && u !== indexUrl) all.add(u);
       });
-      stats.samples.push(`${indexUrl} -> ${$('a[href]').length} liens, ex. : ${[...seenS].slice(2, 10).join('  ')}`);
+      const looks = [...all].filter((u) => /\d{4,}|annonce|propri|bien|detail|fiche|vente[-+/]|for-sale|listing/i.test(u) && !NAV_WORDS.test(u));
+      const ex = (looks.length ? looks : [...all]).slice(0, 8);
+      stats.samples.push(`${indexUrl} -> ${all.size} liens (${looks.length} ressemblent a des annonces), ex. : ${ex.join('  ')}`);
     }
     // meme annonce vue depuis plusieurs pages (?agency=...) -> une seule adresse
     if (site.stripQuery) raws = raws.map((r) => ({ ...r, url: r.url.split('?')[0] }));

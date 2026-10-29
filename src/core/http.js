@@ -39,7 +39,11 @@ async function renderWithPlaywright(url, timeoutMs) {
   const ctx = await _browser.newContext({ userAgent: USER_AGENT, locale: 'fr-FR' });
   const page = await ctx.newPage();
   try {
-    await page.goto(url, { waitUntil: 'networkidle', timeout: timeoutMs });
+    // certaines pages ne sont jamais "au repos" (chat, statistiques) : on attend
+    // le document, puis au plus 8 s que le reseau se calme, puis 1,5 s de rendu.
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+    await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(1500);
     return await page.content();
   } finally {
     await ctx.close();

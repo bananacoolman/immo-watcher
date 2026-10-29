@@ -1,15 +1,20 @@
-// Coldwell Banker — coldwellbanker.fr (retour aux adresses "...+com06.html", oct. 2026)
-// Liste par commune : /vente+immobilier+<commune>+com06.html
-// Fiche : /saint-paul+06+villa+vente+r28480565.html
-const VILLES = ['saint-paul', 'vence', 'la-colle-sur-loup', 'tourrettes-sur-loup', 'saint-jeannet', 'la-gaude', 'gattieres'];
+// Coldwell Banker — coldwellbanker.fr
+// On lit les annonces des agences Coldwell du secteur (Art Realty a Saint-Paul,
+// Standing Realty) + les pages commune. Fiche : /saint-paul+06+villa+vente+r28480565.html
+const AGENCES = [
+  'coldwell-banker-art-realty+id33728',
+  'coldwell-banker-standing-realty+id33342',
+];
 export default {
   name: 'Coldwell Banker',
   enabled: true,
   preferJsonLd: false,
-  needsJs: true,             // liste affichee en JavaScript
-  indexUrls: VILLES.map((v) => `https://www.coldwellbanker.fr/vente+immobilier+${v}+com06.html`),
-  followPages: 3,
+  indexUrls: [
+    ...AGENCES.map((a) => `https://www.coldwellbanker.fr/agences-immobilieres/${a}/vente+immobilier+provence-alpes-cote-d-azur+reg93.html`),
+    'https://www.coldwellbanker.fr/vente+immobilier+saint-paul+com06.html',
+    'https://www.coldwellbanker.fr/vente+immobilier+vence+com06.html',
+  ],
+  followPages: 4,
   detailPattern: /coldwellbanker\.fr\/.*\+r\d+\.html/i,
-  // commune = debut de l'adresse de la fiche : "saint-paul+06+villa+vente+r..."
   communeRegex: /coldwellbanker\.fr\/(?:en\/)?([a-z-]+)\+06\+/i,
 };
