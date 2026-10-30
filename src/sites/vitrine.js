@@ -21,6 +21,7 @@ export function vitrine(name, domain, { communes = COMMUNE_SLUGS, pages = 4 } = 
       `https://${domain}/en/selection.html`,
     ],
     followPages: pages,
+    communeFrom: 'url-first',   // la commune est dans l'adresse de la fiche ("...-vence-la-sine-1-513v...")
     detailPattern: /\/(?:annonce-immobiliere\/)?vente-[^/?#]*-\d+-\d+v\d+[a-z]{0,3}\.html$/i,
   };
 }

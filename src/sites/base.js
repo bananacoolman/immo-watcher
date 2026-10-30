@@ -230,6 +230,11 @@ export async function genericScrape(site, stats = null) {
   }
   if (stats) stats.raw = [...collected.keys()];
 
+  // titres tires d'une adresse "....-1-510v764m.html" : on retire la reference technique
+  for (const r of collected.values()) {
+    if (r.title) r.title = r.title.replace(/\s*\b\d+\s+\d+v\d+[a-z]{0,3}(\.html?)?$/i, '').trim();
+  }
+
   // Normalisation + filtres (secteur, location, prix mini).
   const listings = [];
   let skippedPrice = 0;
